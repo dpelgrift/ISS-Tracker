@@ -32,20 +32,42 @@ double getJulianFromUnix( long unixSecs ) {
 }
 
 long getUnixSecFromJulian(double julian) {
-    // Separate day fraction to avoid rounding issues
-    long days = floor(julian);
-    double frac = julian - days;
+    // // Separate day fraction to avoid rounding issues
+    // long days = floor(julian);
+    // double frac = julian - days;
 
-    days += 2440587;
-    frac += 0.5;
-    return (days * 86400) + (frac * 86400);
+    // days += 2440587;
+    // frac += 0.5;
+    // return (days * 86400) + (frac * 86400);
+
+    return long((julian - 2440587.5) * 86400.);
+}
+
+double eccAnomalyFromMean(double M0, double ecc) {
+    double E = M0, dE = 1.;
+    // Iterative Newton-Raphson solution for eccentic anomaly
+    while (dE > 1e-6) {
+        dE = (E - ecc*sin(E) - M0)/(1. - ecc*cos(E));
+        E = E - dE;
+    }
+    return E;
+}
+
+double trueAnomalyFromEcc(double E, double ecc) {
+    return 2*atan2(sqrt(1.+ecc)*sin(E/2.),sqrt(1.-ecc)*cos(E/2.));
+}
+
+double trueAnomalyFromMean(double M0, double ecc) {
+    double E = eccAnomalyFromMean(M0,ecc);
+    return trueAnomalyFromEcc(E,ecc);
 }
 
 struct Orbit {
     tm epochTime;
     uint8_t epochYear;
     double epochDay;
-    double epoch;
+    double epoch_J;
+    long   epochUTC;
     double incl;
     double a;
     double ecc;
@@ -66,9 +88,10 @@ struct Orbit {
             year += (line1[18] - '0') * 10;
         if( year < 57)          /* cycle around Y2K */
             year += 100;
-        epoch = get_eight_places( line1 + 20) + J1900
+        epoch_J = get_eight_places( line1 + 20) + J1900
              + (double)( year * 365 + (year - 1) / 4);
 
+        epochUTC = getUnixSecFromJulian(epoch_J);
 
         incl = (double)get_angle( line2 + 8) * (PI / 180e+4);
         Omega = (double)get_angle( line2 + 17) * (PI / 180e+4);
@@ -133,24 +156,7 @@ struct Orbit {
     }
 };
 
-double eccAnomalyFromMean(double M0, double ecc) {
-    double E = M0, dE = 1.;
-    // Iterative Newton-Raphson solution for eccentic anomaly
-    while (dE > 1e-6) {
-        dE = (E - ecc*sin(E) - M0)/(1. - ecc*cos(E));
-        E = E - dE;
-    }
-    return E;
-}
 
-double trueAnomalyFromEcc(double E, double ecc) {
-    return 2*atan2(sqrt(1.+ecc)*sin(E/2.),sqrt(1.-ecc)*cos(E/2.));
-}
-
-double trueAnomalyFromMean(double M0, double ecc) {
-    double E = eccAnomalyFromMean(M0,ecc);
-    return trueAnomalyFromEcc(E,ecc);
-}
 
 long JulianDate(int year, int month, int day) {
 	long JD_whole;
