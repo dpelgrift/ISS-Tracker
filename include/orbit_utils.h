@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <time.h>
+#include <coord.h>
 
 #define EARTH_ROT_RATE 7.2921159e-5
 #define MU_EARTH 3.986004418e14
@@ -7,7 +8,6 @@
 #define J1900 (J2000 - 36525. - 1.)
 #define SECONDS_PER_DAY 86400.
 #define SECONDS_PER_DAY_SQ SECONDS_PER_DAY*SECONDS_PER_DAY
-#define TWOPI 2.*PI
 
 static int get_angle( const char *buff) {
    int rval = 0;
@@ -28,19 +28,16 @@ static double get_eight_places( const char *ptr) {
 }
 
 double getJulianFromUnix( long unixSecs ) {
-   return ( unixSecs / 86400.0 ) + 2440587.5;
+   return ( unixSecs / SECONDS_PER_DAY ) + 2440587.5;
 }
 
 long getUnixSecFromJulian(double julian) {
-    // // Separate day fraction to avoid rounding issues
-    // long days = floor(julian);
-    // double frac = julian - days;
+    return long((julian - 2440587.5) * SECONDS_PER_DAY);
+}
 
-    // days += 2440587;
-    // frac += 0.5;
-    // return (days * 86400) + (frac * 86400);
-
-    return long((julian - 2440587.5) * 86400.);
+double getEraFromJulian(double julian) {
+    double Tu = julian - 2451545.0;
+    return fmod(TWO_PI * (0.7790572732640 + 1.00273781191135448 * Tu),TWO_PI);
 }
 
 double eccAnomalyFromMean(double M0, double ecc) {
@@ -78,7 +75,6 @@ struct Orbit {
 
     double n_dot;
 
-    double posECI[3];
 
     void initFromTLE(char* line1, char* line2) {
         char tbuff[13];
@@ -106,30 +102,19 @@ struct Orbit {
         /* Input mean motion,  derivative of mean motion and second  */
         /* deriv of mean motion,  are all in revolutions and days.   */
         /* Convert them here to radians and seconds:                 */
-        n = get_eight_places( tbuff) * TWOPI / SECONDS_PER_DAY;
+        n = get_eight_places( tbuff) * TWO_PI / SECONDS_PER_DAY;
         n_dot = (double)atoi( line1 + 35)
-                        * 1.0e-8 * TWOPI / SECONDS_PER_DAY_SQ;
+                        * 1.0e-8 * TWO_PI / (SECONDS_PER_DAY*SECONDS_PER_DAY);
         if( line1[33] == '-')
             n_dot *= -1.;
 
         a = pow(MU_EARTH/(n*n),1./3.);
     }
 
-    void initFromTLE_el(double w, double O, double inc,
-                     double e, double M, double meanMotion) {
-        omega = w;
-        Omega = O;
-        incl = inc;
-        M0 = M;
+    Vec3 calcPosECI(double dt_sec) {
+        double n_t = n + n_dot*dt_sec;
 
-        // Convert mean motion from rev/day to rad/s
-        n = meanMotion * TWOPI / SECONDS_PER_DAY;
-
-        a = pow(MU_EARTH/(n*n),1.0/3.0);
-    }
-
-    void calcPosECI(double dt_sec) {
-        double M_t = M0 + n*dt_sec;
+        double M_t = M0 + n_t*dt_sec;
 
         double E_t = eccAnomalyFromMean(M_t,ecc);
         // Get true anomaly
@@ -147,12 +132,16 @@ struct Orbit {
         double sin_w = sin(omega);
         double sin_O = sin(Omega);
         double sin_i = sin(incl);
+
+        Vec3 posECI;
     
-        posECI[0] = o_x*(cos_w*cos_O - sin_w*cos_i*sin_O)
+        posECI.x = o_x*(cos_w*cos_O - sin_w*cos_i*sin_O)
                   - o_y*(sin_w*cos_O + cos_w*cos_i*sin_O);
-        posECI[1] = o_x*(cos_w*sin_O + sin_w*cos_i*sin_O)
+        posECI.y = o_x*(cos_w*sin_O + sin_w*cos_i*sin_O)
                   - o_y*(cos_w*cos_i*cos_O - sin_w*sin_O);
-        posECI[2] = o_x*(sin_w*sin_i) + o_y*(cos_w*sin_i);
+        posECI.z = o_x*(sin_w*sin_i) + o_y*(cos_w*sin_i);
+
+        return posECI;
     }
 };
 

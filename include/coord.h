@@ -135,3 +135,16 @@ Vec3 ned2AzElRng(const Vec3& ned) {
 
     return Vec3{az,el,rng}; 
 }
+
+Vec3 eci2ecef(Vec3 eci, double angle) {
+     Dcm eci2ecef = {
+      cos(angle),
+      sin(angle),
+      0,
+      -sin(angle),
+      cos(angle),
+      0,
+      0,0,1
+    };
+    return eci2ecef * eci;
+}

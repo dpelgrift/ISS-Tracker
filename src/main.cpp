@@ -7,9 +7,8 @@
 #include <Adafruit_SH110X.h>
 #include <Adafruit_MMC56x3.h>
 #include "arduino_secrets.h"
-#include <coord.h>
+// #include <coord.h>
 #include <orbit_utils.h>
-
 
 #define SPIWIFI       SPI  // The SPI port
 #define SPIWIFI_SS    13   // Chip select pin
@@ -202,6 +201,28 @@ void loop() {
         Serial.print("M0:    "); Serial.println(orb.M0,8);
         Serial.print("n:     "); Serial.println(orb.n,8);
         Serial.print("n_dot: "); Serial.println(orb.n_dot,8);
+
+
+        double era = getEraFromJulian(orb.epoch_J);
+        Vec3 posECI = orb.calcPosECI(0);
+        Vec3 posECEF = eci2ecef(posECI,era);
+        Vec3 posLLA = ecef2lla(posECI,DEGREES);
+
+        Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
+        Serial.print("posECI: ["); 
+        Serial.print(posECI.x,3); Serial.print(","); 
+        Serial.print(posECI.y,3); Serial.print(","); 
+        Serial.print(posECI.z,3); Serial.println("]"); 
+
+        Serial.print("posECEF:["); 
+        Serial.print(posECEF.x,3); Serial.print(","); 
+        Serial.print(posECEF.y,3); Serial.print(","); 
+        Serial.print(posECEF.z,3); Serial.println("]"); 
+
+        Serial.print("posLLA: ["); 
+        Serial.print(posLLA.x,3); Serial.print(","); 
+        Serial.print(posLLA.y,3); Serial.print(","); 
+        Serial.print(posLLA.z,3); Serial.println("]"); 
 
         // do nothing forevermore:
         while (true);
