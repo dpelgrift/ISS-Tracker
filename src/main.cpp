@@ -1,28 +1,16 @@
 #include <Arduino.h>
 #include <string.h>
 #include <SPI.h>
-#include <WiFiNINA.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 #include <Adafruit_MMC56x3.h>
 #include "arduino_secrets.h"
-// #include <coord.h>
+#include <coord.h>
 #include <orbit_utils.h>
+#include <wifi_utils.h>
 
-#define SPIWIFI       SPI  // The SPI port
-#define SPIWIFI_SS    13   // Chip select pin
-#define ESP32_RESETN  12   // Reset pin
-#define SPIWIFI_ACK   11   // a.k.a BUSY or READY pin
-#define ESP32_GPIO0   -1
-
-#define HEADER_STR "ISS (ZARYA)"
-#define TLE_LEN 69
-#define MAX_BUFFER 1024
-
-#define SERVER "celestrak.org"
-#define QUERY "/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
-
+#include "defs.h"
 
 Adafruit_MMC5603 mag = Adafruit_MMC5603(12345);
 Adafruit_SH1107 display = Adafruit_SH1107(64, 128, &Wire);
@@ -33,26 +21,18 @@ char pass[] = SECRET_PASS;    // network password (use for WPA, or use as key fo
 
 int status = WL_IDLE_STATUS;
 
+unsigned int localPort = 2390;      // local port to listen for UDP packets
+IPAddress timeServer(129, 6, 15, 28); // time.nist.gov NTP server
+// const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
+byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
+
+// A UDP instance to let us send and receive packets over UDP
+WiFiUDP Udp;
+
 // Initialize the Ethernet client library
 // with the IP address and port of the server
 // that you want to connect to (port 80 is default for HTTP):
 WiFiClient client;
-
-void sendQuery() {
-    if (client.connect(SERVER, 80)) {
-        Serial.println("connected to server");
-        // Make a HTTP request:
-        client.print("GET "); client.print(QUERY); client.println(" HTTP/1.1");
-        // client.print("identity=");  client.print(sto_user); 
-        // client.print("&password="); client.print(sto_pass); 
-        // client.print("&query=");    client.print(query); 
-        // client.println(" HTTP/1.1");
-
-        client.println("Host: " SERVER);
-        client.println("Connection: close");
-        client.println();
-    }
-}
 
 int read3LE(char* buff, char* line1, char* line2) {
 
@@ -151,7 +131,7 @@ void setup() {
 
     Serial.println("\nStarting connection to server...");
     // if you get a connection, report back via serial:
-    sendQuery();
+    sendQuery(client);
 
 }
 
@@ -223,6 +203,56 @@ void loop() {
         Serial.print(posLLA.x,3); Serial.print(","); 
         Serial.print(posLLA.y,3); Serial.print(","); 
         Serial.print(posLLA.z,3); Serial.println("]"); 
+
+
+        Serial.println("\nStarting connection to NTP server...");
+        Udp.begin(localPort);
+
+        sendNTPpacket(Udp,timeServer,packetBuffer); // send an NTP packet to a time server
+        // wait to see if a reply is available
+        delay(1000);
+        if (Udp.parsePacket()) {
+            Serial.println("packet received");
+            // We've received a packet, read the data from it
+            Udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
+
+            //the timestamp starts at byte 40 of the received packet and is four bytes,
+            // or two words, long. First, esxtract the two words:
+
+            unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
+            unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
+            // combine the four bytes (two words) into a long integer
+            // this is NTP time (seconds since Jan 1 1900):
+            unsigned long secsSince1900 = highWord << 16 | lowWord;
+            Serial.print("Seconds since Jan 1 1900 = ");
+            Serial.println(secsSince1900);
+
+            // now convert NTP time into everyday time:
+            Serial.print("Unix time = ");
+            // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
+            const unsigned long seventyYears = 2208988800UL;
+            // subtract seventy years:
+            unsigned long epoch = secsSince1900 - seventyYears;
+            // print Unix time:
+            Serial.println(epoch);
+
+
+            // print the hour, minute and second:
+            Serial.print("The UTC time is ");       // UTC is the time at Greenwich Meridian (GMT)
+            Serial.print((epoch  % 86400L) / 3600); // print the hour (86400 equals secs per day)
+            Serial.print(':');
+            if (((epoch % 3600) / 60) < 10) {
+            // In the first 10 minutes of each hour, we'll want a leading '0'
+            Serial.print('0');
+            }
+            Serial.print((epoch  % 3600) / 60); // print the minute (3600 equals secs per minute)
+            Serial.print(':');
+            if ((epoch % 60) < 10) {
+            // In the first 10 seconds of each minute, we'll want a leading '0'
+            Serial.print('0');
+            }
+            Serial.println(epoch % 60); // print the second
+        }
 
         // do nothing forevermore:
         while (true);

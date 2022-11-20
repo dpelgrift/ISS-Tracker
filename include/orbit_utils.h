@@ -1,3 +1,4 @@
+#pragma once
 #include <Arduino.h>
 #include <time.h>
 #include <coord.h>

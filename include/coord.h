@@ -1,3 +1,4 @@
+#pragma once
 #include <Arduino.h>
 #include <math_utils.h>
 #include "wgs84.h"
