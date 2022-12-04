@@ -48,6 +48,33 @@ Vec3 lla2ecef(const Vec3& lla, const bool& angle_unit)
               ((1 - ecc_sqrd) * R_N + alt)* sin(lat)};
 }
 
+// Vec3 ecef2lla(const Vec3& ecef, double h0=0.0) {
+//     double x = ecef.x;
+//     double y = ecef.y;
+//     double z = ecef.z;
+
+//     double clambda = atan2(y,x);
+//     double p = sqrt((x*x)+(y*y));
+//     double h_old = h0;
+//     // first guess with h=0 meters
+//     double theta = atan2(z,p*(1.0-ecc_sqrd));
+//     double cs = cos(theta);
+//     double sn = sin(theta);
+//     double N = pow(a,2)/sqrt(pow(a*cs,2)+pow(b*sn,2));
+//     double h = p/cs - N;
+//     while (abs(h-h_old) > 1.0e-6) {
+//       h_old = h;
+//       theta = atan2(z,p*(1.0-ecc_sqrd*N/(N+h)));
+//       cs = cos(theta);
+//       sn = sin(theta);
+//       N = pow(a,2.0)/sqrt(pow(a*cs,2.0)+pow(b*sn,2.0));
+//       h = p/cs - N;
+//     }
+        
+//     Vec3 llh = {theta*RAD_TO_DEG,clambda*RAD_TO_DEG, h};
+//     return llh;
+// }
+
 Vec3 ecef2lla(const Vec3& ecef, const bool& angle_unit)
 {
   float x = ecef.x;
@@ -130,8 +157,8 @@ Vec3 ecef2ned(const Vec3& ecef,
 Vec3 ned2AzElRng(const Vec3& ned) {
     double horiz = sqrt(ned.x*ned.x + ned.y*ned.y);
 
-    double az = fmod(rad2deg(atan2(ned.x, ned.y)) + 360, 360);
-    double el = rad2deg(asin(ned.z/horiz));
+    double az = fmod(rad2deg(atan2(ned.y, ned.x)) + 360, 360);
+    double el = -rad2deg(asin(ned.z/horiz));
     double rng = norm(ned);
 
     return Vec3{az,el,rng}; 

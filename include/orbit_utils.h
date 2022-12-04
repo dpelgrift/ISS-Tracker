@@ -9,6 +9,7 @@
 #define J1900 (J2000 - 36525. - 1.)
 #define SECONDS_PER_DAY 86400.
 #define SECONDS_PER_DAY_SQ SECONDS_PER_DAY*SECONDS_PER_DAY
+#define J2U 2440587.5
 
 static int get_angle( const char *buff) {
    int rval = 0;
@@ -29,11 +30,11 @@ static double get_eight_places( const char *ptr) {
 }
 
 double getJulianFromUnix( long unixSecs ) {
-   return ( unixSecs / SECONDS_PER_DAY ) + 2440587.5;
+   return ( unixSecs / SECONDS_PER_DAY ) + J2U;
 }
 
 long getUnixSecFromJulian(double julian) {
-    return long((julian - 2440587.5) * SECONDS_PER_DAY);
+    return long((julian - J2U) * SECONDS_PER_DAY);
 }
 
 double getEraFromJulian(double julian) {
@@ -44,7 +45,7 @@ double getEraFromJulian(double julian) {
 double eccAnomalyFromMean(double M0, double ecc) {
     double E = M0, dE = 1.;
     // Iterative Newton-Raphson solution for eccentic anomaly
-    while (dE > 1e-6) {
+    while (dE > 1e-8) {
         dE = (E - ecc*sin(E) - M0)/(1. - ecc*cos(E));
         E = E - dE;
     }
@@ -61,9 +62,6 @@ double trueAnomalyFromMean(double M0, double ecc) {
 }
 
 struct Orbit {
-    tm epochTime;
-    uint8_t epochYear;
-    double epochDay;
     double epoch_J;
     long   epochUTC;
     double incl;
@@ -143,6 +141,53 @@ struct Orbit {
         posECI.z = o_x*(sin_w*sin_i) + o_y*(cos_w*sin_i);
 
         return posECI;
+    }
+
+    void calcPosVelECI(double dt_sec, Vec3& posECI, Vec3& velECI) {
+        double n_t = n + n_dot*dt_sec;
+
+        double M_t = M0 + n_t*dt_sec;
+
+        double E_t = eccAnomalyFromMean(M_t,ecc);
+        // Get true anomaly
+        double v_t = trueAnomalyFromEcc(E_t,ecc);
+        // Get distance from center
+        double r_c = a*(1-ecc*cos(E_t));
+
+        
+        double cos_w = cos(omega);
+        double cos_O = cos(Omega);
+        double cos_i = cos(incl);
+
+        double sin_w = sin(omega);
+        double sin_O = sin(Omega);
+        double sin_i = sin(incl);
+
+        Dcm dcm_plane2ECI = {cos_w*cos_O - sin_w*cos_i*sin_O,
+                             cos_w*sin_O + sin_w*cos_i*sin_O,
+                             sin_w*sin_i,
+                             -(sin_w*cos_O + cos_w*cos_i*sin_O),
+                             (cos_w*cos_i*cos_O - sin_w*sin_O),
+                             cos_w*sin_i,
+                             0, 0, 0};
+
+        double o_x = r_c*cos(v_t);
+        double o_y = r_c*sin(v_t);
+
+        double v = sqrt(MU_EARTH * a)/r_c;
+        double v_x = v * -1.0*sin(E_t);
+        double v_y = v * (sqrt(1.0 - (ecc*ecc)) * cos(E_t));
+
+        Vec3 posPlane = {o_x,o_y,0};
+        Vec3 velPlane = {v_x,v_y,0};
+
+        posECI = dcm_plane2ECI * posPlane;
+        velECI = dcm_plane2ECI * velPlane;
+    }
+
+    void calcPosVelECI_UTC(long UTC, Vec3& posECI, Vec3& velECI) {
+        double dt = double(UTC - epochUTC);
+        calcPosVelECI(dt,posECI,velECI);
     }
 };
 

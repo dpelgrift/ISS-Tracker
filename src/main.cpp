@@ -21,71 +21,12 @@ char pass[] = SECRET_PASS;    // network password (use for WPA, or use as key fo
 
 int status = WL_IDLE_STATUS;
 
-unsigned int localPort = 2390;      // local port to listen for UDP packets
-IPAddress timeServer(129, 6, 15, 28); // time.nist.gov NTP server
-// const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
-byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
 
-// A UDP instance to let us send and receive packets over UDP
-WiFiUDP Udp;
 
-// Initialize the Ethernet client library
-// with the IP address and port of the server
-// that you want to connect to (port 80 is default for HTTP):
-WiFiClient client;
 
-int read3LE(char* buff, char* line1, char* line2) {
+NtpQueryHandler ntp{};
+TleQueryHandler tle{};
 
-    int idx = 0;
-    String str = "";
-
-    // Read lines until header found
-    while (idx < MAX_BUFFER) {
-        str += *buff; // Read character from buffer into string
-        if (*buff == '\n') {
-            if (str.startsWith(HEADER_STR)) break;
-            else str = "";
-        }
-        buff++;
-        idx++;
-    }
-    
-    // If reached end of buffer, header not found
-    if (idx == MAX_BUFFER) return -1;
-    buff++;
-    memcpy(line1, buff, 69);
-    memcpy(line2, buff+71, 69);
-
-    // Read line 1
-    // while (*buff != '\n') {
-    //     *line1 = *buff;
-    //     line1++;
-    // }
-    // Read line 2
-    // while (c != '\n') {
-    //     c = client.read();
-    //     *line2 = c;
-    //     line2++;
-    // }
-    return 0;
-}
-
-void printWifiStatus() {
-    // print the SSID of the network you're attached to:
-    Serial.print("SSID: ");
-    Serial.println(WiFi.SSID());
-
-    // print your board's IP address:
-    IPAddress ip = WiFi.localIP();
-    Serial.print("IP Address: ");
-    Serial.println(ip);
-
-    // print the received signal strength:
-    long rssi = WiFi.RSSI();
-    Serial.print("signal strength (RSSI):");
-    Serial.print(rssi);
-    Serial.println(" dBm");
-}
 
 void setup() {
     //Initialize serial and wait for port to open:
@@ -129,46 +70,20 @@ void setup() {
     Serial.println("Connected to wifi");
     // printWifiStatus();
 
+    ntp.begin();
+
     Serial.println("\nStarting connection to server...");
     // if you get a connection, report back via serial:
-    sendQuery(client);
+    tle.sendQuery();
 
 }
 
-uint32_t bytes = 0;
-char buff[MAX_BUFFER];
-char line1[69], line2[69];
-
 void loop() {
-    // if there are incoming bytes available
-    // from the server, read them and print them:
-    while (client.available()) {
-        char c = client.read();
-        // Serial.write(c);
-        buff[bytes]=c;
-        bytes++;
-    }
 
+    if (tle.rcvData()) {
+        tle.real3LE();
 
-
-    // if the server's disconnected, stop the client:
-    if (!client.connected()) {
-        Serial.println();
-        Serial.println("disconnecting from server.");
-        client.stop();
-
-        Serial.println(buff);
-
-        // Parse read bytes into TLE lines
-        read3LE(buff, line1, line2);
-
-        Serial.print("Line 1: ");
-        Serial.write(line1,69);
-        Serial.print("\nLine 2: ");
-        Serial.write(line2,69);
-
-        Orbit orb{};
-        orb.initFromTLE(line1,line2);
+        Orbit orb = tle.getOrbit();
 
         Serial.println();
         Serial.print("epoch: "); Serial.println(orb.epoch_J);
@@ -180,83 +95,96 @@ void loop() {
         Serial.print("omega: "); Serial.println(orb.omega,8);
         Serial.print("M0:    "); Serial.println(orb.M0,8);
         Serial.print("n:     "); Serial.println(orb.n,8);
-        Serial.print("n_dot: "); Serial.println(orb.n_dot,8);
+        Serial.print("n_dot: "); Serial.println(orb.n_dot,16);
 
 
         double era = getEraFromJulian(orb.epoch_J);
-        Vec3 posECI = orb.calcPosECI(0);
-        Vec3 posECEF = eci2ecef(posECI,era);
-        Vec3 posLLA = ecef2lla(posECI,DEGREES);
-
         Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
+
+        Vec3 posECI, velECI;
+        orb.calcPosVelECI(0,posECI,velECI);
+
         Serial.print("posECI: ["); 
         Serial.print(posECI.x,3); Serial.print(","); 
         Serial.print(posECI.y,3); Serial.print(","); 
         Serial.print(posECI.z,3); Serial.println("]"); 
 
-        Serial.print("posECEF:["); 
+        Serial.print("velECI: ["); 
+        Serial.print(velECI.x,3); Serial.print(","); 
+        Serial.print(velECI.y,3); Serial.print(","); 
+        Serial.print(velECI.z,3); Serial.println("]"); 
+
+        Vec3 posECEF = eci2ecef(posECI,-era);
+        Serial.print("posECEF: ["); 
         Serial.print(posECEF.x,3); Serial.print(","); 
         Serial.print(posECEF.y,3); Serial.print(","); 
         Serial.print(posECEF.z,3); Serial.println("]"); 
 
+        Vec3 posLLA = ecef2lla(posECEF,DEGREES);
         Serial.print("posLLA: ["); 
         Serial.print(posLLA.x,3); Serial.print(","); 
         Serial.print(posLLA.y,3); Serial.print(","); 
         Serial.print(posLLA.z,3); Serial.println("]"); 
 
+        Vec3 llaRef = {SECRET_LAT,SECRET_LON,0};
+        Vec3 posNED = ecef2ned(posECEF,llaRef,DEGREES);
+        Serial.print("posNED: ["); 
+        Serial.print(posNED.x,3); Serial.print(","); 
+        Serial.print(posNED.y,3); Serial.print(","); 
+        Serial.print(posNED.z,3); Serial.println("]"); 
 
-        Serial.println("\nStarting connection to NTP server...");
-        Udp.begin(localPort);
+        Vec3 posAER = ned2AzElRng(posNED);
+        Serial.print("posAER: ["); 
+        Serial.print(posAER.x,3); Serial.print(","); 
+        Serial.print(posAER.y,3); Serial.print(","); 
+        Serial.print(posAER.z,3); Serial.println("]"); 
 
-        sendNTPpacket(Udp,timeServer,packetBuffer); // send an NTP packet to a time server
-        // wait to see if a reply is available
-        delay(1000);
-        if (Udp.parsePacket()) {
-            Serial.println("packet received");
-            // We've received a packet, read the data from it
-            Udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
+        while (true) {
+            ntp.sendNTPpacket(); // send an NTP packet to a time server
+            // wait to see if a reply is available
+            delay(1000);
+            ntp.parsePacket();
 
-            //the timestamp starts at byte 40 of the received packet and is four bytes,
-            // or two words, long. First, esxtract the two words:
+            // Calc ERA for current UTC
+            era = getEraFromJulian(getJulianFromUnix(ntp.unixEpoch));
+            // Calc ECI Pos/Vel for current UTC
+            orb.calcPosVelECI_UTC(ntp.unixEpoch,posECI,velECI);
 
-            unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-            unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-            // combine the four bytes (two words) into a long integer
-            // this is NTP time (seconds since Jan 1 1900):
-            unsigned long secsSince1900 = highWord << 16 | lowWord;
-            Serial.print("Seconds since Jan 1 1900 = ");
-            Serial.println(secsSince1900);
+            Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
 
-            // now convert NTP time into everyday time:
-            Serial.print("Unix time = ");
-            // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
-            const unsigned long seventyYears = 2208988800UL;
-            // subtract seventy years:
-            unsigned long epoch = secsSince1900 - seventyYears;
-            // print Unix time:
-            Serial.println(epoch);
+            Serial.print("posECI: ["); 
+            Serial.print(posECI.x,3); Serial.print(","); 
+            Serial.print(posECI.y,3); Serial.print(","); 
+            Serial.print(posECI.z,3); Serial.println("]"); 
 
+            posECEF = eci2ecef(posECI,-era);
+            Serial.print("posECEF: ["); 
+            Serial.print(posECEF.x,3); Serial.print(","); 
+            Serial.print(posECEF.y,3); Serial.print(","); 
+            Serial.print(posECEF.z,3); Serial.println("]"); 
 
-            // print the hour, minute and second:
-            Serial.print("The UTC time is ");       // UTC is the time at Greenwich Meridian (GMT)
-            Serial.print((epoch  % 86400L) / 3600); // print the hour (86400 equals secs per day)
-            Serial.print(':');
-            if (((epoch % 3600) / 60) < 10) {
-            // In the first 10 minutes of each hour, we'll want a leading '0'
-            Serial.print('0');
-            }
-            Serial.print((epoch  % 3600) / 60); // print the minute (3600 equals secs per minute)
-            Serial.print(':');
-            if ((epoch % 60) < 10) {
-            // In the first 10 seconds of each minute, we'll want a leading '0'
-            Serial.print('0');
-            }
-            Serial.println(epoch % 60); // print the second
-        }
+            posLLA = ecef2lla(posECEF,DEGREES);
+            Serial.print("posLLA: ["); 
+            Serial.print(posLLA.x,3); Serial.print(","); 
+            Serial.print(posLLA.y,3); Serial.print(","); 
+            Serial.print(posLLA.z,3); Serial.println("]"); 
 
-        // do nothing forevermore:
-        while (true);
+            posNED = ecef2ned(posECEF,llaRef,DEGREES);
+
+            Serial.print("posNED: ["); 
+            Serial.print(posNED.x,3); Serial.print(","); 
+            Serial.print(posNED.y,3); Serial.print(","); 
+            Serial.print(posNED.z,3); Serial.println("]");
+
+            posAER = ned2AzElRng(posNED);
+            Serial.print("posAER: ["); 
+            Serial.print(posAER.x,3); Serial.print(","); 
+            Serial.print(posAER.y,3); Serial.print(","); 
+            Serial.print(posAER.z,3); Serial.println("]"); 
+
+            delay(10000);
+        };
     }
-  }
+}
 
 
