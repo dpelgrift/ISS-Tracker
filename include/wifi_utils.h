@@ -27,12 +27,9 @@ struct NtpQueryHandler {
 
     // send an NTP request to the time server at the given address
     inline void sendNTPpacket() {
-        //Serial.println("1");
         // set all bytes in the buffer to 0
         memset(packetBuffer, 0, NTP_PACKET_SIZE);
         // Initialize values needed to form NTP request
-        // (see URL above for details on the packets)
-        //Serial.println("2");
         packetBuffer[0] = 0b11100011;   // LI, Version, Mode
         packetBuffer[1] = 0;     // Stratum, or type of clock
         packetBuffer[2] = 6;     // Polling Interval
@@ -48,11 +45,8 @@ struct NtpQueryHandler {
         // all NTP fields have been given values, now
         // you can send a packet requesting a timestamp:
         Udp.beginPacket(timeserver, 123); //NTP requests are to port 123
-        //Serial.println("4");
         Udp.write(packetBuffer, NTP_PACKET_SIZE);
-        //Serial.println("5");
         Udp.endPacket();
-        //Serial.println("6");
     }
 
     inline bool parsePacket() {
@@ -160,4 +154,66 @@ struct TleQueryHandler {
     }
 };
 
+void printEncryptionType(int thisType) {
+    // read the encryption type and print out the name:
+    switch (thisType) {
+        case ENC_TYPE_WEP:
+        Serial.println("WEP");
+        break;
+        case ENC_TYPE_TKIP:
+        Serial.println("WPA");
+        break;
+        case ENC_TYPE_CCMP:
+        Serial.println("WPA2");
+        break;
+        case ENC_TYPE_NONE:
+        Serial.println("None");
+        break;
+        case ENC_TYPE_AUTO:
+        Serial.println("Auto");
+        break;
+        case ENC_TYPE_UNKNOWN:
+        default:
+        Serial.println("Unknown");
+        break;
+    }
+    }
 
+    void printMacAddress(byte mac[]) {
+    for (int i = 5; i >= 0; i--) {
+        if (mac[i] < 16) {
+        Serial.print("0");
+        }
+        Serial.print(mac[i], HEX);
+        if (i > 0) {
+        Serial.print(":");
+        }
+    }
+    Serial.println();
+}
+
+void listNetworks() {
+    // scan for nearby networks:
+    Serial.println("** Scan Networks **");
+    int numSsid = WiFi.scanNetworks();
+    if (numSsid == -1) {
+        Serial.println("Couldn't get a wifi connection");
+        while (true);
+    }
+
+    // print the list of networks seen:
+    Serial.print("number of available networks:");
+    Serial.println(numSsid);
+
+    // print the network number and name for each network found:
+    for (int thisNet = 0; thisNet < numSsid; thisNet++) {
+        Serial.print(thisNet);
+        Serial.print(") ");
+        Serial.print(WiFi.SSID(thisNet));
+        Serial.print("\tSignal: ");
+        Serial.print(WiFi.RSSI(thisNet));
+        Serial.print(" dBm");
+        Serial.print("\tEncryption: ");
+        printEncryptionType(WiFi.encryptionType(thisNet));
+    }
+}

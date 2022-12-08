@@ -2,96 +2,24 @@
 #include <string.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SH110X.h>
 #include <Adafruit_MMC56x3.h>
 #include "arduino_secrets.h"
 #include <coord.h>
 #include <orbit_utils.h>
 #include <wifi_utils.h>
+#include <display_utils.h>
 
 #include "defs.h"
 
 Adafruit_MMC5603 mag = Adafruit_MMC5603(12345);
-Adafruit_SH1107 display = Adafruit_SH1107(64, 128, &Wire);
-
 
 char ssid[] = SECRET_SSID;    // network SSID
 char pass[] = SECRET_PASS;    // network password (use for WPA, or use as key for WEP)
 
 int status = WL_IDLE_STATUS;
 
-
-
-
 NtpQueryHandler ntp{};
 TleQueryHandler tle{};
-
-
-void printEncryptionType(int thisType) {
-  // read the encryption type and print out the name:
-  switch (thisType) {
-    case ENC_TYPE_WEP:
-      Serial.println("WEP");
-      break;
-    case ENC_TYPE_TKIP:
-      Serial.println("WPA");
-      break;
-    case ENC_TYPE_CCMP:
-      Serial.println("WPA2");
-      break;
-    case ENC_TYPE_NONE:
-      Serial.println("None");
-      break;
-    case ENC_TYPE_AUTO:
-      Serial.println("Auto");
-      break;
-    case ENC_TYPE_UNKNOWN:
-    default:
-      Serial.println("Unknown");
-      break;
-  }
-}
-
-
-void printMacAddress(byte mac[]) {
-  for (int i = 5; i >= 0; i--) {
-    if (mac[i] < 16) {
-      Serial.print("0");
-    }
-    Serial.print(mac[i], HEX);
-    if (i > 0) {
-      Serial.print(":");
-    }
-  }
-  Serial.println();
-}
-
-void listNetworks() {
-  // scan for nearby networks:
-  Serial.println("** Scan Networks **");
-  int numSsid = WiFi.scanNetworks();
-  if (numSsid == -1) {
-    Serial.println("Couldn't get a wifi connection");
-    while (true);
-  }
-
-  // print the list of networks seen:
-  Serial.print("number of available networks:");
-  Serial.println(numSsid);
-
-  // print the network number and name for each network found:
-  for (int thisNet = 0; thisNet < numSsid; thisNet++) {
-    Serial.print(thisNet);
-    Serial.print(") ");
-    Serial.print(WiFi.SSID(thisNet));
-    Serial.print("\tSignal: ");
-    Serial.print(WiFi.RSSI(thisNet));
-    Serial.print(" dBm");
-    Serial.print("\tEncryption: ");
-    printEncryptionType(WiFi.encryptionType(thisNet));
-  }
-}
 
 
 void setup() {
@@ -235,12 +163,14 @@ void loop() {
             delay(1000);
             ntp.parsePacket();
 
+            
+
             // Calc ERA for current UTC
             era = getEraFromJulian(getJulianFromUnix(ntp.unixEpoch));
+            Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
+
             // Calc ECI Pos/Vel for current UTC
             orb.calcPosVelECI_UTC(ntp.unixEpoch,posECI,velECI);
-
-            Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
 
             Serial.print("posECI: ["); 
             Serial.print(posECI.x,3); Serial.print(","); 
@@ -271,6 +201,22 @@ void loop() {
             Serial.print(posAER.x,3); Serial.print(","); 
             Serial.print(posAER.y,3); Serial.print(","); 
             Serial.print(posAER.z,3); Serial.println("]"); 
+
+            // Print status to display
+            resetDisplay(0,10,1);
+            display.printf("UTC: %lu\n",ntp.unixEpoch);
+
+            display.print("posLLA: ["); 
+            display.print(posLLA.x,3); display.print(","); 
+            display.print(posLLA.y,3); display.print(","); 
+            display.print(posLLA.z,3); display.println("]"); 
+
+            display.print("posAER: ["); 
+            display.print(posAER.x,3); display.print(","); 
+            display.print(posAER.y,3); display.print(","); 
+            display.print(posAER.z,3); display.println("]"); 
+            
+            display.display();
 
             delay(10000);
         };
