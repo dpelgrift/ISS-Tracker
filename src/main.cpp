@@ -21,6 +21,10 @@ int status = WL_IDLE_STATUS;
 NtpQueryHandler ntp{};
 TleQueryHandler tle{};
 
+Orbit orb{};
+Vec3 llaRef = {SECRET_LAT,SECRET_LON,0};
+Vec3 posECI, velECI, posECEF, posLLA, posNED, posAER;
+double era;
 
 void setup() {
     //Initialize serial and wait for port to open:
@@ -29,7 +33,12 @@ void setup() {
 
 
     delay(250); // wait for the OLED to power up
-    display.begin(0x3C, true); // Address 0x3C default
+    /* Initialise the display */
+    if (!display.begin(0x3C, true)) {  // Address 0x3C default
+      /* There was a problem detecting the MMC5603 ... check your connections */
+      Serial.println("No display detected");
+      while (CHECK_DISPLAY_CONNECTION) delay(10);
+    }
 
     // Show image buffer on the display hardware.
     // Since the buffer is intialized with an Adafruit splashscreen
@@ -37,19 +46,15 @@ void setup() {
     display.display();
     delay(1000);
 
-    display.clearDisplay();
-    display.display();
     display.setRotation(1);
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
-    display.setCursor(0,0);
+    resetDisplay(0,0,1);
 
     /* Initialise the compass */
-    // if (!mag.begin(MMC56X3_DEFAULT_ADDRESS, &Wire)) {  // I2C mode
-    //   /* There was a problem detecting the MMC5603 ... check your connections */
-    //   Serial.println("Ooops, no MMC5603 detected ... Check your wiring!");
-    //   while (1) delay(10);
-    // }
+    if (!mag.begin(MMC56X3_DEFAULT_ADDRESS, &Wire)) {  // I2C mode
+      /* There was a problem detecting the MMC5603 ... check your connections */
+      Serial.println("No compass detected");
+      while (CHECK_COMPASS_CONNECTION) delay(10);
+    }
 
     // check for the WiFi module:
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
@@ -60,9 +65,6 @@ void setup() {
     }
 
     String fv = WiFi.firmwareVersion();
-    if (fv < "1.0.0") {
-        Serial.println("Please upgrade the firmware");
-    }
     Serial.print("Found firmware "); Serial.println(fv);
 
     Serial.println("Scanning available networks...");
@@ -74,7 +76,7 @@ void setup() {
     display.print("Attempting to connect to SSID: ");
     display.println(ssid);
     display.display();
-    // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
+    // Connect to WPA/WPA2 network
     do {
         status = WiFi.begin(ssid, pass);
         delay(10000);     // wait until connection is ready!
@@ -84,143 +86,89 @@ void setup() {
     display.println("Connected to wifi");
     display.display();
     delay(1000);
-    // printWifiStatus();
 
+    // Start NTP connection
     ntp.begin();
 
     Serial.println("\nStarting connection to server...");
     display.println("\nStarting connection to server...");
     display.display();
-    // if you get a connection, report back via serial:
+
+    // Send TLE query
     tle.sendQuery();
+
+    // Wait for response
+    while (!tle.rcvData()){}
+
+    // Parse received TLE
+    orb = tle.getOrbit();
+
+    Serial.println();
+    Serial.print("epoch: "); Serial.println(orb.epoch_J);
+    Serial.print("utc:   "); Serial.println(orb.epochUTC);
+    Serial.print("incl:  "); Serial.println(orb.incl,8);
+    Serial.print("a:     "); Serial.println(orb.a);
+    Serial.print("ecc:   "); Serial.println(orb.ecc,8);
+    Serial.print("Omega: "); Serial.println(orb.Omega,8);
+    Serial.print("omega: "); Serial.println(orb.omega,8);
+    Serial.print("M0:    "); Serial.println(orb.M0,8);
+    Serial.print("n:     "); Serial.println(orb.n,8);
+    Serial.print("n_dot: "); Serial.println(orb.n_dot,16);
 
 }
 
 void loop() {
 
-    if (tle.rcvData()) {
-        tle.real3LE();
+    ntp.sendNTPpacket(); // send an NTP packet to a time server
+    // wait to see if a reply is available
+    delay(1000);
+    ntp.parsePacket();
 
-        Orbit orb = tle.getOrbit();
+    // Calc ERA for current UTC
+    era = getEraFromJulian(getJulianFromUnix(ntp.unixEpoch));
+    Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
 
-        Serial.println();
-        Serial.print("epoch: "); Serial.println(orb.epoch_J);
-        Serial.print("utc:   "); Serial.println(orb.epochUTC);
-        Serial.print("incl:  "); Serial.println(orb.incl,8);
-        Serial.print("a:     "); Serial.println(orb.a);
-        Serial.print("ecc:   "); Serial.println(orb.ecc,8);
-        Serial.print("Omega: "); Serial.println(orb.Omega,8);
-        Serial.print("omega: "); Serial.println(orb.omega,8);
-        Serial.print("M0:    "); Serial.println(orb.M0,8);
-        Serial.print("n:     "); Serial.println(orb.n,8);
-        Serial.print("n_dot: "); Serial.println(orb.n_dot,16);
+    // Calc ECI Pos/Vel for current UTC
+    orb.calcPosVelECI_UTC(ntp.unixEpoch,posECI,velECI);
 
+    Serial.print("posECI: ["); 
+    Serial.print(posECI.x,3); Serial.print(","); 
+    Serial.print(posECI.y,3); Serial.print(","); 
+    Serial.print(posECI.z,3); Serial.println("]"); 
 
-        double era = getEraFromJulian(orb.epoch_J);
-        Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
+    posECEF = eci2ecef(posECI,-era);
+    Serial.print("posECEF: ["); 
+    Serial.print(posECEF.x,3); Serial.print(","); 
+    Serial.print(posECEF.y,3); Serial.print(","); 
+    Serial.print(posECEF.z,3); Serial.println("]"); 
 
-        Vec3 posECI, velECI;
-        orb.calcPosVelECI(0,posECI,velECI);
+    posLLA = ecef2lla(posECEF,DEGREES);
+    Serial.print("posLLA: ["); 
+    Serial.print(posLLA.x,3); Serial.print(","); 
+    Serial.print(posLLA.y,3); Serial.print(","); 
+    Serial.print(posLLA.z,3); Serial.println("]"); 
 
-        Serial.print("posECI: ["); 
-        Serial.print(posECI.x,3); Serial.print(","); 
-        Serial.print(posECI.y,3); Serial.print(","); 
-        Serial.print(posECI.z,3); Serial.println("]"); 
+    posNED = ecef2ned(posECEF,llaRef,DEGREES);
+    Serial.print("posNED: ["); 
+    Serial.print(posNED.x,3); Serial.print(","); 
+    Serial.print(posNED.y,3); Serial.print(","); 
+    Serial.print(posNED.z,3); Serial.println("]");
 
-        Serial.print("velECI: ["); 
-        Serial.print(velECI.x,3); Serial.print(","); 
-        Serial.print(velECI.y,3); Serial.print(","); 
-        Serial.print(velECI.z,3); Serial.println("]"); 
+    posAER = ned2AzElRng(posNED);
+    Serial.print("posAER: ["); 
+    Serial.print(posAER.x,3); Serial.print(","); 
+    Serial.print(posAER.y,3); Serial.print(","); 
+    Serial.print(posAER.z,3); Serial.println("]"); 
 
-        Vec3 posECEF = eci2ecef(posECI,-era);
-        Serial.print("posECEF: ["); 
-        Serial.print(posECEF.x,3); Serial.print(","); 
-        Serial.print(posECEF.y,3); Serial.print(","); 
-        Serial.print(posECEF.z,3); Serial.println("]"); 
+    // Print status to display
+    resetDisplay(0,10,1);
+    display.printf("UTC: %lu\n",ntp.unixEpoch);
+    display.printf("posLLA: [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z);
+    display.printf("posAER: [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
+    
+    display.display();
 
-        Vec3 posLLA = ecef2lla(posECEF,DEGREES);
-        Serial.print("posLLA: ["); 
-        Serial.print(posLLA.x,3); Serial.print(","); 
-        Serial.print(posLLA.y,3); Serial.print(","); 
-        Serial.print(posLLA.z,3); Serial.println("]"); 
-
-        Vec3 llaRef = {SECRET_LAT,SECRET_LON,0};
-        Vec3 posNED = ecef2ned(posECEF,llaRef,DEGREES);
-        Serial.print("posNED: ["); 
-        Serial.print(posNED.x,3); Serial.print(","); 
-        Serial.print(posNED.y,3); Serial.print(","); 
-        Serial.print(posNED.z,3); Serial.println("]"); 
-
-        Vec3 posAER = ned2AzElRng(posNED);
-        Serial.print("posAER: ["); 
-        Serial.print(posAER.x,3); Serial.print(","); 
-        Serial.print(posAER.y,3); Serial.print(","); 
-        Serial.print(posAER.z,3); Serial.println("]"); 
-
-        while (true) {
-            ntp.sendNTPpacket(); // send an NTP packet to a time server
-            // wait to see if a reply is available
-            delay(1000);
-            ntp.parsePacket();
-
-            
-
-            // Calc ERA for current UTC
-            era = getEraFromJulian(getJulianFromUnix(ntp.unixEpoch));
-            Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
-
-            // Calc ECI Pos/Vel for current UTC
-            orb.calcPosVelECI_UTC(ntp.unixEpoch,posECI,velECI);
-
-            Serial.print("posECI: ["); 
-            Serial.print(posECI.x,3); Serial.print(","); 
-            Serial.print(posECI.y,3); Serial.print(","); 
-            Serial.print(posECI.z,3); Serial.println("]"); 
-
-            posECEF = eci2ecef(posECI,-era);
-            Serial.print("posECEF: ["); 
-            Serial.print(posECEF.x,3); Serial.print(","); 
-            Serial.print(posECEF.y,3); Serial.print(","); 
-            Serial.print(posECEF.z,3); Serial.println("]"); 
-
-            posLLA = ecef2lla(posECEF,DEGREES);
-            Serial.print("posLLA: ["); 
-            Serial.print(posLLA.x,3); Serial.print(","); 
-            Serial.print(posLLA.y,3); Serial.print(","); 
-            Serial.print(posLLA.z,3); Serial.println("]"); 
-
-            posNED = ecef2ned(posECEF,llaRef,DEGREES);
-
-            Serial.print("posNED: ["); 
-            Serial.print(posNED.x,3); Serial.print(","); 
-            Serial.print(posNED.y,3); Serial.print(","); 
-            Serial.print(posNED.z,3); Serial.println("]");
-
-            posAER = ned2AzElRng(posNED);
-            Serial.print("posAER: ["); 
-            Serial.print(posAER.x,3); Serial.print(","); 
-            Serial.print(posAER.y,3); Serial.print(","); 
-            Serial.print(posAER.z,3); Serial.println("]"); 
-
-            // Print status to display
-            resetDisplay(0,10,1);
-            display.printf("UTC: %lu\n",ntp.unixEpoch);
-
-            display.print("posLLA: ["); 
-            display.print(posLLA.x,3); display.print(","); 
-            display.print(posLLA.y,3); display.print(","); 
-            display.print(posLLA.z,3); display.println("]"); 
-
-            display.print("posAER: ["); 
-            display.print(posAER.x,3); display.print(","); 
-            display.print(posAER.y,3); display.print(","); 
-            display.print(posAER.z,3); display.println("]"); 
-            
-            display.display();
-
-            delay(10000);
-        };
-    }
+    delay(10000);
 }
 
 

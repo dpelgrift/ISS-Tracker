@@ -12,4 +12,5 @@
 #define SERVER "celestrak.org"
 #define QUERY "/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
 
-#define NTP_PACKET_SIZE 48
+#define CHECK_DISPLAY_CONNECTION false
+#define CHECK_COMPASS_CONNECTION false

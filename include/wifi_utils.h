@@ -5,6 +5,9 @@
 #include <WiFiUdp.h>
 #include "defs.h"
 
+
+#define NTP_PACKET_SIZE 48
+
 const unsigned long seventyYears = 2208988800UL;
 const unsigned int localPort = 2390;      // local port to listen for UDP packets
 
@@ -100,8 +103,8 @@ int read3LE(char* buff, char* line1, char* line2) {
     // If reached end of buffer, header not found
     if (idx == MAX_BUFFER) return -1;
     buff++;
-    memcpy(line1, buff, 69);
-    memcpy(line2, buff+71, 69);
+    memcpy(line1, buff, TLE_LEN);
+    memcpy(line2, buff+71, TLE_LEN);
 
     return 0;
 }
@@ -112,8 +115,8 @@ struct TleQueryHandler {
     char rcvBuffer[MAX_BUFFER];
     uint32_t rcvBytes;
 
-    char line1[69];
-    char line2[69];
+    char line1[TLE_LEN];
+    char line2[TLE_LEN];
 
     inline void sendQuery() {
         if (client.connect(SERVER, 80)) {
