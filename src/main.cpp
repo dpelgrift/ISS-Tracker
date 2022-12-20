@@ -2,25 +2,25 @@
 #include <string.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <Adafruit_MMC56x3.h>
 #include "arduino_secrets.h"
 #include <coord.h>
 #include <orbit_utils.h>
 #include <wifi_utils.h>
 #include <display_utils.h>
+#include <pedestal.h>
 
 #include "defs.h"
 
-Adafruit_MMC5603 mag = Adafruit_MMC5603(12345);
-sensors_event_t compassEvent;
 
 char ssid[] = SECRET_SSID;    // network SSID
 char pass[] = SECRET_PASS;    // network password (use for WPA, or use as key for WEP)
 
 int status = WL_IDLE_STATUS;
 
+// Objects/Wrappers
 NtpQueryHandler ntp{};
 TleQueryHandler tle{};
+Pedestal ped{};
 
 Orbit orb{};
 Vec3 llaRef = {SECRET_LAT,SECRET_LON,0};
@@ -30,8 +30,12 @@ double era;
 void setup() {
     //Initialize serial and wait for port to open:
     Serial.begin(9600);
-    while (!Serial) {}
+    while (!Serial && WAIT_FOR_SERIAL) {}
 
+    // Test calcBearing function
+    double testBearing = calcBearing(llaRef[0],llaRef[1],MAG_NORTH_LAT,MAG_NORTH_LON);
+    Serial.print("Bearing (deg): ");
+    Serial.println(testBearing,3);
 
     delay(250); // wait for the OLED to power up
     /* Initialise the display */
@@ -50,12 +54,8 @@ void setup() {
     display.setRotation(1);
     resetDisplay(0,0,1);
 
-    /* Initialise the compass */
-    if (!mag.begin(MMC56X3_DEFAULT_ADDRESS, &Wire)) {  // I2C mode
-      /* There was a problem detecting the MMC5603 ... check your connections */
-      Serial.println("No compass detected");
-      while (CHECK_COMPASS_CONNECTION) delay(10);
-    }
+    // Initialize pedestal controller
+    ped.begin();
 
     // check for the WiFi module:
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
@@ -77,6 +77,7 @@ void setup() {
     display.print("Attempting to connect to SSID: ");
     display.println(ssid);
     display.display();
+    
     // Connect to WPA/WPA2 network
     do {
         status = WiFi.begin(ssid, pass);
