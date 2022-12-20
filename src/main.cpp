@@ -12,6 +12,7 @@
 #include "defs.h"
 
 Adafruit_MMC5603 mag = Adafruit_MMC5603(12345);
+sensors_event_t compassEvent;
 
 char ssid[] = SECRET_SSID;    // network SSID
 char pass[] = SECRET_PASS;    // network password (use for WPA, or use as key for WEP)
