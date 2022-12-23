@@ -116,7 +116,7 @@ Vec3 ned2AzElRng(const Vec3& ned) {
     double horiz = sqrt(ned.x*ned.x + ned.y*ned.y);
 
     double az = fmod(rad2deg(atan2(ned.y, ned.x)) + 360, 360);
-    double el = -rad2deg(asin(ned.z/horiz));
+    double el = rad2deg(atan2(-ned.z,horiz));
     double rng = norm(ned);
 
     return Vec3{az,el,rng}; 

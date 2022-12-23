@@ -1,11 +1,11 @@
 #include "pedestal.h"
 
 double steps2deg(long steps) {
-    return double(steps) * 180.0 / STEPS_PER_REV;
+    return double(steps) * 360.0 / STEPS_PER_REV;
 }
 
 long deg2steps(double azDeg) {
-    return floor(azDeg * STEPS_PER_REV / 180.0);
+    return floor(azDeg * STEPS_PER_REV / 360.0);
 }
 
 void Pedestal::begin() {
@@ -15,8 +15,9 @@ void Pedestal::begin() {
 
     // Initialize stepper
     stepper = AccelStepper(AccelStepper::FULL4WIRE, STEP1, STEP2, STEP3, STEP4);
-    stepper.setSpeed(STEPPER_SPEED);
-    stepper.runToNewPosition(0);
+    stepper.setMaxSpeed(STEPPER_SPEED);
+    stepper.setAcceleration(STEPPER_ACCEL);
+    // stepper.runToNewPosition(0);
     
     /* Initialise the compass */
     compass = Adafruit_MMC5603(12345);
@@ -34,7 +35,11 @@ void Pedestal::zero() {
 }
 
 void Pedestal::setTargetAz(double targetAzDeg) {
-    double currAz = getCurrPedestalAz();
+    double currAz = steps2deg(stepper.currentPosition());
+
+    currAz = fmod(currAz + 3600,360.0);
+
+    Serial.printf("currAz: %0.3f\n",currAz);
 
     // Compute which direction is closer to current az
     double relAz = targetAzDeg - currAz;
@@ -43,6 +48,8 @@ void Pedestal::setTargetAz(double targetAzDeg) {
     } else if (relAz < -180.0) {
         relAz += 360.0;
     }
+
+    Serial.printf("relAz: %0.3f\n",relAz);
 
     stepper.move(deg2steps(relAz));
 }
@@ -53,7 +60,7 @@ void Pedestal::setElevation(double el) {
 
 
 void Pedestal::runStepper() {
-    stepper.runSpeed();
+    stepper.run();
 }
 
 double Pedestal::getCurrPedestalAz() {
@@ -65,5 +72,19 @@ double Pedestal::getCurrPedestalAz() {
     heading += TRUE_NORTH_OFFSET_DEG;
 
     heading = fmod(heading + 360,360);
+    return heading;
+}
+
+double Pedestal::getCompassHeading() {
+
+    // Compute average heading over a number of readings
+    double heading = 0;
+    for (size_t i = 0; i < 50; ++i) {
+        compass.getEvent(&compassEvent);
+        heading += atan2(compassEvent.magnetic.y,compassEvent.magnetic.x) * RAD_TO_DEG;
+    }
+    heading /= 50;
+    heading -= TRUE_NORTH_OFFSET_DEG;
+
     return heading;
 }

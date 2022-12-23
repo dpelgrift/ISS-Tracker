@@ -48,6 +48,6 @@ struct TleQueryHandler {
 
     void sendQuery();
     bool rcvData();
-    int real3LE();
+    int readTLE();
     Orbit getOrbit();
 };

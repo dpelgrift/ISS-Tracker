@@ -7,14 +7,15 @@
 #include <coord.h>
 #include <defs.h>
 
-#define STEPS_PER_REV 2038*4
-#define STEPPER_SPEED 400
+#define STEPS_PER_REV (2038*4)
+#define STEPPER_SPEED 600
+#define STEPPER_ACCEL 300
 
 // Stepper pins
-#define STEP1 PIN_A0
-#define STEP2 PIN_A1
-#define STEP3 PIN_A2
-#define STEP4 PIN_A3
+#define STEP1 A1
+#define STEP2 A3
+#define STEP3 A2
+#define STEP4 A4
 
 #define SERVO_PIN 8
 
@@ -34,4 +35,5 @@ struct Pedestal {
     void runStepper();
     void setCurrAz(long steps);
     double getCurrPedestalAz();
+    double getCompassHeading();
 };

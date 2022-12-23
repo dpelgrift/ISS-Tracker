@@ -121,7 +121,7 @@ bool TleQueryHandler::rcvData() {
     return false;
 }
 
-int TleQueryHandler::real3LE() {
+int TleQueryHandler::readTLE() {
     return read3LE(rcvBuffer,line1,line2);
 }
 
@@ -135,35 +135,35 @@ void printEncryptionType(int thisType) {
     // read the encryption type and print out the name:
     switch (thisType) {
         case ENC_TYPE_WEP:
-        Serial.println("WEP");
-        break;
+            Serial.println("WEP");
+            break;
         case ENC_TYPE_TKIP:
-        Serial.println("WPA");
-        break;
+            Serial.println("WPA");
+            break;
         case ENC_TYPE_CCMP:
-        Serial.println("WPA2");
-        break;
+            Serial.println("WPA2");
+            break;
         case ENC_TYPE_NONE:
-        Serial.println("None");
-        break;
+            Serial.println("None");
+            break;
         case ENC_TYPE_AUTO:
-        Serial.println("Auto");
-        break;
+            Serial.println("Auto");
+            break;
         case ENC_TYPE_UNKNOWN:
         default:
-        Serial.println("Unknown");
-        break;
+            Serial.println("Unknown");
+            break;
     }
     }
 
     void printMacAddress(byte mac[]) {
     for (int i = 5; i >= 0; i--) {
         if (mac[i] < 16) {
-        Serial.print("0");
+            Serial.print("0");
         }
         Serial.print(mac[i], HEX);
         if (i > 0) {
-        Serial.print(":");
+            Serial.print(":");
         }
     }
     Serial.println();

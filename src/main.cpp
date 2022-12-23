@@ -26,10 +26,13 @@ Orbit orb{};
 Vec3 llaRef = {SECRET_LAT,SECRET_LON,0};
 Vec3 posECI, velECI, posECEF, posLLA, posNED, posAER;
 double era;
+long lastUpdateTimeMillis;
+long lastUnixUpdateMillis;
 
 void setup() {
     //Initialize serial and wait for port to open:
     Serial.begin(9600);
+    delay(250);
     while (!Serial && WAIT_FOR_SERIAL) {}
 
     // Test calcBearing function
@@ -57,6 +60,19 @@ void setup() {
     // Initialize pedestal controller
     ped.begin();
 
+    // Get current pedestal azimuth
+    double currAz = ped.getCompassHeading();
+    Serial.printf("currAz (deg): %0.3f\n",currAz);
+    ped.stepper.move(deg2steps(-currAz));
+    while (ped.stepper.distanceToGo() != 0) {
+        // long currPos = ped.stepper.currentPosition();
+        // Serial.printf("Steps: %li, Deg: %0.3f\n",currPos,steps2deg(currPos));
+        ped.stepper.run();
+    }
+    ped.stepper.setCurrentPosition(0);
+    currAz = ped.getCompassHeading();
+    Serial.printf("currAz (deg): %0.3f\n",currAz);
+
     // check for the WiFi module:
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
     while (WiFi.status() == WL_NO_MODULE) {
@@ -77,7 +93,7 @@ void setup() {
     display.print("Attempting to connect to SSID: ");
     display.println(ssid);
     display.display();
-    
+
     // Connect to WPA/WPA2 network
     do {
         status = WiFi.begin(ssid, pass);
@@ -101,6 +117,10 @@ void setup() {
 
     // Wait for response
     while (!tle.rcvData()){}
+    tle.readTLE();
+
+    Serial.println(tle.line1);
+    Serial.println(tle.line2);
 
     // Parse received TLE
     orb = tle.getOrbit();
@@ -117,60 +137,55 @@ void setup() {
     Serial.print("n:     "); Serial.println(orb.n,8);
     Serial.print("n_dot: "); Serial.println(orb.n_dot,16);
 
-}
-
-void loop() {
-
+    // Get unix time
     ntp.sendNTPpacket(); // send an NTP packet to a time server
     // wait to see if a reply is available
     delay(1000);
     ntp.parsePacket();
 
-    // Calc ERA for current UTC
-    era = getEraFromJulian(getJulianFromUnix(ntp.unixEpoch));
-    Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
+    lastUnixUpdateMillis = millis();
+    lastUpdateTimeMillis = millis();
+}
 
-    // Calc ECI Pos/Vel for current UTC
-    orb.calcPosVelECI_UTC(ntp.unixEpoch,posECI,velECI);
+void loop() {
 
-    Serial.print("posECI: ["); 
-    Serial.print(posECI.x,3); Serial.print(","); 
-    Serial.print(posECI.y,3); Serial.print(","); 
-    Serial.print(posECI.z,3); Serial.println("]"); 
+    // Advance stepper if necessary
+    ped.runStepper();
+    // long currPos = ped.stepper.currentPosition();
+    // Serial.printf("Steps: %lu, Deg: %0.3f\n",currPos,steps2deg(currPos));
 
-    posECEF = eci2ecef(posECI,-era);
-    Serial.print("posECEF: ["); 
-    Serial.print(posECEF.x,3); Serial.print(","); 
-    Serial.print(posECEF.y,3); Serial.print(","); 
-    Serial.print(posECEF.z,3); Serial.println("]"); 
+    if (millis() - lastUpdateTimeMillis > 1000) {
+        long dt = (millis() - lastUnixUpdateMillis)/1000;
 
-    posLLA = ecef2lla(posECEF,DEGREES);
-    Serial.print("posLLA: ["); 
-    Serial.print(posLLA.x,3); Serial.print(","); 
-    Serial.print(posLLA.y,3); Serial.print(","); 
-    Serial.print(posLLA.z,3); Serial.println("]"); 
+        // Calc ERA for current UTC
+        era = getEraFromJulian(getJulianFromUnix(ntp.unixEpoch + dt));
+        Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
 
-    posNED = ecef2ned(posECEF,llaRef,DEGREES);
-    Serial.print("posNED: ["); 
-    Serial.print(posNED.x,3); Serial.print(","); 
-    Serial.print(posNED.y,3); Serial.print(","); 
-    Serial.print(posNED.z,3); Serial.println("]");
+        // Calc ECI Pos/Vel for current UTC
+        orb.calcPosVelECI_UTC(ntp.unixEpoch + dt,posECI,velECI);
+        posECEF = eci2ecef(posECI,-era);
+        posLLA = ecef2lla(posECEF,DEGREES);
+        posNED = ecef2ned(posECEF,llaRef,DEGREES);
+        posAER = ned2AzElRng(posNED);
 
-    posAER = ned2AzElRng(posNED);
-    Serial.print("posAER: ["); 
-    Serial.print(posAER.x,3); Serial.print(","); 
-    Serial.print(posAER.y,3); Serial.print(","); 
-    Serial.print(posAER.z,3); Serial.println("]"); 
+        // Update target position
+        ped.setTargetAz(posAER[0]);
 
-    // Print status to display
-    resetDisplay(0,10,1);
-    display.printf("UTC: %lu\n",ntp.unixEpoch);
-    display.printf("posLLA: [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z);
-    display.printf("posAER: [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
-    
-    display.display();
+        Serial.printf("posECI:  [%0.3f,%0.3f,%0.3f]\n",posECI.x,posECI.y,posECI.z);
+        Serial.printf("posECEF: [%0.3f,%0.3f,%0.3f]\n",posECEF.x,posECEF.y,posECEF.z);
+        Serial.printf("posLLA:  [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z);
+        Serial.printf("posNED:  [%0.3f,%0.3f,%0.3f]\n",posNED.x,posNED.y,posNED.z);
+        Serial.printf("posAER:  [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
 
-    delay(10000);
+        // Print status to display
+        resetDisplay(0,10,1);
+        display.printf("UTC: %lu\n",ntp.unixEpoch + dt);
+        display.printf("posLLA: [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z);
+        display.printf("posAER: [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
+        
+        display.display();
+        lastUpdateTimeMillis = millis();
+    }
 }
 
 

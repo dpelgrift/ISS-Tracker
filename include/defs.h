@@ -16,7 +16,7 @@
 
 #define CHECK_DISPLAY_CONNECTION    false
 #define CHECK_COMPASS_CONNECTION    false
-#define WAIT_FOR_SERIAL             true
+#define WAIT_FOR_SERIAL             false
 
 #define MAG_NORTH_LAT           86.494
 #define MAG_NORTH_LON           162.867
