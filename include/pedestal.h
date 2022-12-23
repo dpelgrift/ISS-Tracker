@@ -33,7 +33,7 @@ struct Pedestal {
     void setTargetAz(double azDeg);
     void setElevation(double el);
     void runStepper();
-    void setCurrAz(long steps);
+    void pointNorth();
     double getCurrPedestalAz();
     double getCompassHeading();
 };

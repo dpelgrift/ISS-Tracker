@@ -11,12 +11,13 @@
 
 Adafruit_SH1107 display = Adafruit_SH1107(HEIGHT, WIDTH, &Wire);
 
-void resetDisplay(int16_t x, int16_t y, uint8_t textSize=1) {
+void resetDisplay(int16_t x, int16_t y, uint8_t textSize=1, bool doRefresh=false) {
     display.clearDisplay();
-    display.display();
     display.setTextSize(textSize);
     display.setTextColor(SH110X_WHITE);
     display.setCursor(x,y);
+
+    if (doRefresh) display.display();
 }
 
 void clearDisplay() {

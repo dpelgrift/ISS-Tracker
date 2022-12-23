@@ -63,6 +63,19 @@ void Pedestal::runStepper() {
     stepper.run();
 }
 
+void Pedestal::pointNorth() {
+    double currAz = getCompassHeading();
+    Serial.printf("currAz (deg): %0.3f\n",currAz);
+    stepper.move(deg2steps(-currAz));
+    while (stepper.distanceToGo() != 0) {stepper.run();}
+    currAz = getCompassHeading();
+    stepper.move(deg2steps(-currAz));
+    while (stepper.distanceToGo() != 0) {stepper.run();}
+    
+    currAz = getCompassHeading();
+    Serial.printf("currAz (deg): %0.3f\n",currAz);
+}
+
 double Pedestal::getCurrPedestalAz() {
     // Get compass heading
     compass.getEvent(&compassEvent);

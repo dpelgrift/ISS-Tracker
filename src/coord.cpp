@@ -50,6 +50,7 @@ Vec3 ecef2lla(const Vec3& ecef, const bool& angle_unit)
     float mu_bar = atan2(z + (((ecc_sqrd * (1 - f)) / (1 - ecc_sqrd)) * a * pow(sin(beta), 3)),
                         s - (ecc_sqrd * a * pow(cos(beta), 3)));
     
+    size_t iter = 0;
     while (abs(lat - mu_bar) > 1e-10)
     {
         lat  = mu_bar;
@@ -57,6 +58,8 @@ Vec3 ecef2lla(const Vec3& ecef, const bool& angle_unit)
                     cos(lat));
         mu_bar = atan2(z + (((ecc_sqrd * (1 - f)) / (1 - ecc_sqrd)) * a * pow(sin(beta), 3)),
                       s - (ecc_sqrd * a * pow(cos(beta), 3)));
+        iter++;
+        if (iter > 1e3) break;
     }
 
     lat = mu_bar;

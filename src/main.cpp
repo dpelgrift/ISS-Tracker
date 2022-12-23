@@ -26,8 +26,12 @@ Orbit orb{};
 Vec3 llaRef = {SECRET_LAT,SECRET_LON,0};
 Vec3 posECI, velECI, posECEF, posLLA, posNED, posAER;
 double era;
-long lastUpdateTimeMillis;
-long lastUnixUpdateMillis;
+size_t lastTleUpdateMillis;
+size_t lastOrbitUpdateMillis;
+size_t lastUnixUpdateMillis;
+
+bool ntpPacketSent = false;
+bool tleQuerySent = false;
 
 void setup() {
     //Initialize serial and wait for port to open:
@@ -59,19 +63,8 @@ void setup() {
 
     // Initialize pedestal controller
     ped.begin();
-
-    // Get current pedestal azimuth
-    double currAz = ped.getCompassHeading();
-    Serial.printf("currAz (deg): %0.3f\n",currAz);
-    ped.stepper.move(deg2steps(-currAz));
-    while (ped.stepper.distanceToGo() != 0) {
-        // long currPos = ped.stepper.currentPosition();
-        // Serial.printf("Steps: %li, Deg: %0.3f\n",currPos,steps2deg(currPos));
-        ped.stepper.run();
-    }
+    ped.pointNorth();
     ped.stepper.setCurrentPosition(0);
-    currAz = ped.getCompassHeading();
-    Serial.printf("currAz (deg): %0.3f\n",currAz);
 
     // check for the WiFi module:
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
@@ -83,7 +76,6 @@ void setup() {
 
     String fv = WiFi.firmwareVersion();
     Serial.print("Found firmware "); Serial.println(fv);
-
     Serial.println("Scanning available networks...");
     listNetworks();
 
@@ -140,51 +132,98 @@ void setup() {
     // Get unix time
     ntp.sendNTPpacket(); // send an NTP packet to a time server
     // wait to see if a reply is available
-    delay(1000);
-    ntp.parsePacket();
+    // delay(1000);
+    while (!ntp.parsePacket()) {};
 
-    lastUnixUpdateMillis = millis();
-    lastUpdateTimeMillis = millis();
+    lastUnixUpdateMillis  = millis();
+    lastTleUpdateMillis   = millis();
+    lastOrbitUpdateMillis = millis();
+    delay(100);
+
+    ntpPacketSent = false;
+    tleQuerySent = false;
 }
+
+size_t timeSinceNtpUpdate, timeSinceTleUpdate, timeSinceOrbitUpdate;
 
 void loop() {
 
+    size_t currMillis = millis();
+
+    // Try to catch overflow of millis() count and handle gracefully
+    if (currMillis < lastUnixUpdateMillis) {
+        lastUnixUpdateMillis = currMillis;
+        lastTleUpdateMillis = currMillis;
+        lastOrbitUpdateMillis = currMillis;
+    }
+
+    timeSinceNtpUpdate = (currMillis - lastUnixUpdateMillis)/1000;
+    timeSinceTleUpdate = (currMillis - lastTleUpdateMillis)/1000;
+    timeSinceOrbitUpdate = (currMillis - lastOrbitUpdateMillis);
+
     // Advance stepper if necessary
     ped.runStepper();
-    // long currPos = ped.stepper.currentPosition();
-    // Serial.printf("Steps: %lu, Deg: %0.3f\n",currPos,steps2deg(currPos));
 
-    if (millis() - lastUpdateTimeMillis > 1000) {
-        long dt = (millis() - lastUnixUpdateMillis)/1000;
+    // Resend NTP packet regularly to keep time synchronized
+    if (!ntpPacketSent && (timeSinceNtpUpdate > (TIME_REFRESH_DELAY_MIN*60))) {
+        ntp.sendNTPpacket();
+        ntpPacketSent = true;
+        Serial.println("NTP Packet Sent");
+    } else {
+        if (ntp.parsePacket()) {
+            Serial.println("Parsed NTP Packet");
+            lastUnixUpdateMillis = millis();
+            ntpPacketSent = false;
+        }
+    }
 
-        // Calc ERA for current UTC
-        era = getEraFromJulian(getJulianFromUnix(ntp.unixEpoch + dt));
+    // Resend TLE Query regularly to get updated ephemeris
+    if (!tleQuerySent && (timeSinceTleUpdate > (TLE_REFRESH_DELAY_MIN * 60))) {
+        tle.sendQuery();
+        tleQuerySent = true;
+        Serial.println("TLE Query Sent");
+    } else if (tleQuerySent) {
+        if (tle.rcvData()) {
+            Serial.println("Updating Ephemeris");
+            tle.readTLE();
+            lastTleUpdateMillis = millis();
+            tleQuerySent = false;
+        }
+    }
+
+    long currUTC = ntp.unixEpoch + timeSinceNtpUpdate;
+
+    if (timeSinceOrbitUpdate >= ORBIT_REFRESH_DELAY_MS) {
+        Serial.printf("timeSinceNtpUpdate: %lu, timeSinceTleUpdate: %lu\n",
+        timeSinceNtpUpdate, timeSinceTleUpdate);
+
+        // Calc Earth-Rotation-Angle for current UTC
+        era = getEraFromJulian(getJulianFromUnix(currUTC));
         Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
 
         // Calc ECI Pos/Vel for current UTC
-        orb.calcPosVelECI_UTC(ntp.unixEpoch + dt,posECI,velECI);
+        orb.calcPosVelECI_UTC(currUTC,posECI,velECI);
+        Serial.printf("posECI:  [%0.3f,%0.3f,%0.3f]\n",posECI.x,posECI.y,posECI.z);
         posECEF = eci2ecef(posECI,-era);
+        Serial.printf("posECEF: [%0.3f,%0.3f,%0.3f]\n",posECEF.x,posECEF.y,posECEF.z);
         posLLA = ecef2lla(posECEF,DEGREES);
+        Serial.printf("posLLA:  [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
         posNED = ecef2ned(posECEF,llaRef,DEGREES);
+        Serial.printf("posNED:  [%0.3f,%0.3f,%0.3f]\n",posNED.x,posNED.y,posNED.z);
         posAER = ned2AzElRng(posNED);
+        Serial.printf("posAER:  [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
 
         // Update target position
         ped.setTargetAz(posAER[0]);
 
-        Serial.printf("posECI:  [%0.3f,%0.3f,%0.3f]\n",posECI.x,posECI.y,posECI.z);
-        Serial.printf("posECEF: [%0.3f,%0.3f,%0.3f]\n",posECEF.x,posECEF.y,posECEF.z);
-        Serial.printf("posLLA:  [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z);
-        Serial.printf("posNED:  [%0.3f,%0.3f,%0.3f]\n",posNED.x,posNED.y,posNED.z);
-        Serial.printf("posAER:  [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
-
         // Print status to display
         resetDisplay(0,10,1);
-        display.printf("UTC: %lu\n",ntp.unixEpoch + dt);
-        display.printf("posLLA: [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z);
+        display.printf("UTC: %lu\n",currUTC);
+        display.printf("posLLA: [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
         display.printf("posAER: [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
         
         display.display();
-        lastUpdateTimeMillis = millis();
+        lastOrbitUpdateMillis = millis();
     }
 }
 

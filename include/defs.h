@@ -21,3 +21,7 @@
 #define MAG_NORTH_LAT           86.494
 #define MAG_NORTH_LON           162.867
 #define TRUE_NORTH_OFFSET_DEG   -3.73
+
+#define TIME_REFRESH_DELAY_MIN 10
+#define TLE_REFRESH_DELAY_MIN  60
+#define ORBIT_REFRESH_DELAY_MS 800
