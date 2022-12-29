@@ -4,6 +4,7 @@
 
 NtpQueryHandler::NtpQueryHandler() {
     timeserver = IPAddress(129, 6, 15, 28);
+    // timeserver = IPAddress(132, 163, 4, 101); // time-a.timefreq.bldrdoc.gov
 }
 
 void NtpQueryHandler::begin() {
@@ -56,6 +57,9 @@ bool NtpQueryHandler::parsePacket() {
         
         // subtract seventy years:
         unixEpoch = secsSince1900 - seventyYears;
+
+        setTime(unixEpoch + timeZone * SECS_PER_HOUR);
+
         // print Unix time:
         Serial.println(unixEpoch);
         lastQueryTimeMillis = millis();

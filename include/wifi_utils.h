@@ -5,6 +5,7 @@
 #include <WiFiUdp.h>
 #include "defs.h"
 #include "orbit_utils.h"
+#include "TimeLib.h"
 
 
 #define NTP_PACKET_SIZE 48
@@ -18,14 +19,13 @@ void listNetworks();
 
 int read3LE(char* buff, char* line1, char* line2);
 
-
 struct NtpQueryHandler {
     WiFiUDP Udp;
     IPAddress timeserver;
     byte packetBuffer[NTP_PACKET_SIZE];
 
-    unsigned long unixEpoch;
-    unsigned long lastQueryTimeMillis;
+    time_t unixEpoch;
+    time_t lastQueryTimeMillis;
 
     NtpQueryHandler();
 
@@ -51,3 +51,4 @@ struct TleQueryHandler {
     int readTLE();
     Orbit getOrbit();
 };
+

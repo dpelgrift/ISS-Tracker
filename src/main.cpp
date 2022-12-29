@@ -26,9 +26,9 @@ Orbit orb{};
 Vec3 llaRef = {SECRET_LAT,SECRET_LON,0};
 Vec3 posECI, velECI, posECEF, posLLA, posNED, posAER;
 double era;
-size_t lastTleUpdateMillis;
-size_t lastOrbitUpdateMillis;
-size_t lastUnixUpdateMillis;
+time_t lastTleUpdateMillis;
+time_t lastOrbitUpdateMillis;
+time_t lastNtpUpdateMillis;
 
 bool ntpPacketSent = false;
 bool tleQuerySent = false;
@@ -104,6 +104,13 @@ void setup() {
     display.println("\nStarting connection to server...");
     display.display();
 
+    // Get unix time
+    ntp.sendNTPpacket(); // send an NTP packet to a time server
+    // wait to see if a reply is available
+    // delay(1000);
+    while (!ntp.parsePacket()) {};
+    displayCurrTime();
+
     // Send TLE query
     tle.sendQuery();
 
@@ -129,37 +136,38 @@ void setup() {
     Serial.print("n:     "); Serial.println(orb.n,8);
     Serial.print("n_dot: "); Serial.println(orb.n_dot,16);
 
-    // Get unix time
-    ntp.sendNTPpacket(); // send an NTP packet to a time server
-    // wait to see if a reply is available
-    // delay(1000);
-    while (!ntp.parsePacket()) {};
-
-    lastUnixUpdateMillis  = millis();
-    lastTleUpdateMillis   = millis();
-    lastOrbitUpdateMillis = millis();
+    lastNtpUpdateMillis   = millis();
+    lastTleUpdateMillis   = lastNtpUpdateMillis;
+    lastOrbitUpdateMillis = lastNtpUpdateMillis;
     delay(100);
+
+    Serial.print("In setup(): lastNtpUpdateMillis: ");
+    Serial.println(lastTleUpdateMillis);
+    Serial.print("In setup(): lastTleUpdateMillis: ");
+    Serial.println(lastTleUpdateMillis);
 
     ntpPacketSent = false;
     tleQuerySent = false;
 }
 
-size_t timeSinceNtpUpdate, timeSinceTleUpdate, timeSinceOrbitUpdate;
+uint32_t currMillis, timeSinceNtpUpdate, timeSinceTleUpdate, timeSinceOrbitUpdateMillis;
 
 void loop() {
 
-    size_t currMillis = millis();
+    currMillis = millis();
 
     // Try to catch overflow of millis() count and handle gracefully
-    if (currMillis < lastUnixUpdateMillis) {
-        lastUnixUpdateMillis = currMillis;
+    if (currMillis < lastNtpUpdateMillis) {
+        lastNtpUpdateMillis = currMillis;
         lastTleUpdateMillis = currMillis;
         lastOrbitUpdateMillis = currMillis;
+
+        Serial.println("Time counter overflow hit");
     }
 
-    timeSinceNtpUpdate = (currMillis - lastUnixUpdateMillis)/1000;
+    timeSinceNtpUpdate = (currMillis - lastNtpUpdateMillis)/1000;
     timeSinceTleUpdate = (currMillis - lastTleUpdateMillis)/1000;
-    timeSinceOrbitUpdate = (currMillis - lastOrbitUpdateMillis);
+    timeSinceOrbitUpdateMillis = (currMillis - lastOrbitUpdateMillis);
 
     // Advance stepper if necessary
     ped.runStepper();
@@ -172,7 +180,7 @@ void loop() {
     } else {
         if (ntp.parsePacket()) {
             Serial.println("Parsed NTP Packet");
-            lastUnixUpdateMillis = millis();
+            lastNtpUpdateMillis = millis();
             ntpPacketSent = false;
         }
     }
@@ -193,9 +201,12 @@ void loop() {
 
     long currUTC = ntp.unixEpoch + timeSinceNtpUpdate;
 
-    if (timeSinceOrbitUpdate >= ORBIT_REFRESH_DELAY_MS) {
+    if (timeSinceOrbitUpdateMillis >= ORBIT_REFRESH_DELAY_MS) {
         Serial.printf("timeSinceNtpUpdate: %lu, timeSinceTleUpdate: %lu\n",
         timeSinceNtpUpdate, timeSinceTleUpdate);
+
+        Serial.printf("System Time: %04i-%02i-%02i  %02i:%02i:%02i\n",
+                        year(),month(),day(),hour(),minute(),second());
 
         // Calc Earth-Rotation-Angle for current UTC
         era = getEraFromJulian(getJulianFromUnix(currUTC));
@@ -203,27 +214,31 @@ void loop() {
 
         // Calc ECI Pos/Vel for current UTC
         orb.calcPosVelECI_UTC(currUTC,posECI,velECI);
-        Serial.printf("posECI:  [%0.3f,%0.3f,%0.3f]\n",posECI.x,posECI.y,posECI.z);
+        lastOrbitUpdateMillis = millis();
         posECEF = eci2ecef(posECI,-era);
-        Serial.printf("posECEF: [%0.3f,%0.3f,%0.3f]\n",posECEF.x,posECEF.y,posECEF.z);
         posLLA = ecef2lla(posECEF,DEGREES);
-        Serial.printf("posLLA:  [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
         posNED = ecef2ned(posECEF,llaRef,DEGREES);
-        Serial.printf("posNED:  [%0.3f,%0.3f,%0.3f]\n",posNED.x,posNED.y,posNED.z);
         posAER = ned2AzElRng(posNED);
+
+        Serial.printf("posECI:  [%0.3f,%0.3f,%0.3f]\n",posECI.x,posECI.y,posECI.z);
+        Serial.printf("posECEF: [%0.3f,%0.3f,%0.3f]\n",posECEF.x,posECEF.y,posECEF.z);
+        Serial.printf("posLLA:  [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
+        Serial.printf("posNED:  [%0.3f,%0.3f,%0.3f]\n",posNED.x,posNED.y,posNED.z);
         Serial.printf("posAER:  [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
 
         // Update target position
         ped.setTargetAz(posAER[0]);
 
         // Print status to display
-        resetDisplay(0,10,1);
-        display.printf("UTC: %lu\n",currUTC);
-        display.printf("posLLA: [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
-        display.printf("posAER: [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
+        // resetDisplay(0,10,1);
+        // display.printf("UTC: %lu\n",currUTC);
+        // display.printf("posLLA: [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
+        // display.printf("posAER: [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
         
-        display.display();
-        lastOrbitUpdateMillis = millis();
+        // display.display();
+
+        // Display current date/time on screen
+        displayCurrTime();
     }
 }
 

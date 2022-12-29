@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
+#include "TimeLib.h"
 
 #define WIDTH 128
 #define HEIGHT 64
@@ -27,4 +28,25 @@ void clearDisplay() {
 
 int beginDisplay() {
     return display.begin(0x3C, true); // Address 0x3C default
+}
+
+void displayCurrTime() {
+    display.clearDisplay();
+
+    // Display Time in "hh:mm" format
+    display.setCursor(4,2);
+    display.setTextSize(4);
+    display.printf("%02i:%02i",hour(),minute());
+
+    // Dividing Line
+    display.writeFastHLine(0,38,WIDTH,SH110X_WHITE);
+
+    // Display Date in "Www MM/dd" format
+    display.setCursor(2,46);
+    display.setTextSize(2);
+    display.print(dayShortStr(weekday()));
+    display.setCursor(68,46);
+    display.printf("%02i/%02i",month(),day());
+
+    display.display();
 }
