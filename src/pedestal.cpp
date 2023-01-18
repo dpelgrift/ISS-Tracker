@@ -55,31 +55,35 @@ void Pedestal::setTargetAz(double targetAzDeg) {
 }
 
 void Pedestal::setElevation(double el) {
-    servo.writeMicroseconds(map(long(el*100),0,18000,1000,2000));
+    servo.writeMicroseconds(map(long(el*100),0,18000,500,2500));
 }
-
 
 void Pedestal::runStepper() {
     stepper.run();
 }
 
 void Pedestal::pointNorth() {
-    double currAz = getCompassHeading();
+    double currAz = getAverageHeading();
     Serial.printf("currAz (deg): %0.3f\n",currAz);
     stepper.move(deg2steps(-currAz));
     while (stepper.distanceToGo() != 0) {stepper.run();}
-    currAz = getCompassHeading();
+    currAz = getAverageHeading();
     stepper.move(deg2steps(-currAz));
     while (stepper.distanceToGo() != 0) {stepper.run();}
     
-    currAz = getCompassHeading();
+    currAz = getAverageHeading();
     Serial.printf("currAz (deg): %0.3f\n",currAz);
+}
+
+double Pedestal::getHeading() {
+    // Get compass heading
+    compass.getEvent(&compassEvent);
+    return atan2(-compassEvent.magnetic.x,compassEvent.magnetic.y) * RAD_TO_DEG;
 }
 
 double Pedestal::getCurrPedestalAz() {
     // Get compass heading
-    compass.getEvent(&compassEvent);
-    double heading = atan2(compassEvent.magnetic.y,compassEvent.magnetic.x) * RAD_TO_DEG;
+    double heading = getHeading();
 
     // Convert to true north heading
     heading += TRUE_NORTH_OFFSET_DEG;
@@ -88,16 +92,14 @@ double Pedestal::getCurrPedestalAz() {
     return heading;
 }
 
-double Pedestal::getCompassHeading() {
-
+double Pedestal::getAverageHeading() {
     // Compute average heading over a number of readings
     double heading = 0;
     for (size_t i = 0; i < 50; ++i) {
-        compass.getEvent(&compassEvent);
-        heading += atan2(compassEvent.magnetic.y,compassEvent.magnetic.x) * RAD_TO_DEG;
+        heading += getHeading();
     }
     heading /= 50;
-    heading -= TRUE_NORTH_OFFSET_DEG;
+    heading += TRUE_NORTH_OFFSET_DEG;
 
     return heading;
 }

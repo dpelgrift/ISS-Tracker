@@ -63,8 +63,18 @@ void setup() {
 
     // Initialize pedestal controller
     ped.begin();
+
+    ped.setElevation(90);
+    delay(1000);
+    ped.servo.writeMicroseconds(500);
+    delay(1000);
+    ped.servo.writeMicroseconds(2500);
+    delay(1000);
+    ped.setElevation(90);
+
     ped.pointNorth();
     ped.stepper.setCurrentPosition(0);
+
 
     // check for the WiFi module:
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
@@ -228,6 +238,7 @@ void loop() {
 
         // Update target position
         ped.setTargetAz(posAER[0]);
+        ped.setElevation(90+posAER[1]);
 
         // Print status to display
         // resetDisplay(0,10,1);

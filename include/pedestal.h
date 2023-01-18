@@ -17,7 +17,7 @@
 #define STEP3 A2
 #define STEP4 A4
 
-#define SERVO_PIN 8
+#define SERVO_PIN 10
 
 double steps2deg(long steps);
 long deg2steps(double azDeg);
@@ -34,6 +34,7 @@ struct Pedestal {
     void setElevation(double el);
     void runStepper();
     void pointNorth();
+    double getHeading();
     double getCurrPedestalAz();
-    double getCompassHeading();
+    double getAverageHeading();
 };
