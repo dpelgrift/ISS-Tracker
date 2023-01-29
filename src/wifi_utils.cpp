@@ -26,8 +26,6 @@ void NtpQueryHandler::sendNTPpacket() {
     packetBuffer[14]  = 49;
     packetBuffer[15]  = 52;
 
-    //Serial.println("3");
-
     // all NTP fields have been given values, now
     // you can send a packet requesting a timestamp:
     Udp.beginPacket(timeserver, 123); //NTP requests are to port 123

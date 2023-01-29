@@ -17,12 +17,10 @@ void Pedestal::begin() {
     stepper = AccelStepper(AccelStepper::FULL4WIRE, STEP1, STEP2, STEP3, STEP4);
     stepper.setMaxSpeed(STEPPER_SPEED);
     stepper.setAcceleration(STEPPER_ACCEL);
-    // stepper.runToNewPosition(0);
     
-    /* Initialise the compass */
+    // Initialise the compass
     compass = Adafruit_MMC5603(12345);
-    if (!compass.begin(MMC56X3_DEFAULT_ADDRESS, &Wire)) {  // I2C mode
-        /* There was a problem detecting the MMC5603 ... check your connections */
+    if (!compass.begin(MMC56X3_DEFAULT_ADDRESS, &Wire)) {
         Serial.println("No compass detected");
         while (CHECK_COMPASS_CONNECTION and !DO_BYPASS_COMPASS) delay(10);
     }

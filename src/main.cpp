@@ -42,7 +42,6 @@ void setup() {
     delay(250); // wait for the OLED to power up
     /* Initialise the display */
     if (!display.begin(0x3C, true)) {  // Address 0x3C default
-      /* There was a problem detecting the MMC5603 ... check your connections */
       Serial.println("No display detected");
       while (CHECK_DISPLAY_CONNECTION) delay(10);
     }
@@ -128,7 +127,6 @@ void setup() {
     // Get unix time
     ntp.sendNTPpacket(); // send an NTP packet to a time server
     // wait to see if a reply is available
-    // delay(1000);
     while (!ntp.parsePacket()) {};
     displayCurrTime(0.0,0.0);
 
