@@ -34,15 +34,10 @@ bool ntpPacketSent = false;
 bool tleQuerySent = false;
 
 void setup() {
-    //Initialize serial and wait for port to open:
+    //Initialize serial and wait for port to open
     Serial.begin(9600);
     delay(250);
     while (!Serial && WAIT_FOR_SERIAL) {}
-
-    // Test calcBearing function
-    double testBearing = calcBearing(llaRef[0],llaRef[1],MAG_NORTH_LAT,MAG_NORTH_LON);
-    Serial.print("Bearing (deg): ");
-    Serial.println(testBearing,3);
 
     delay(250); // wait for the OLED to power up
     /* Initialise the display */
@@ -92,8 +87,11 @@ void setup() {
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
     while (WiFi.status() == WL_NO_MODULE) {
         Serial.println("Communication with WiFi module failed!");
+        resetDisplay(0,0,1);
+        display.println("Communication with WiFi module failed!");
+        display.display();
         // don't continue
-        delay(1000);
+        while (true) {}
     }
 
     String fv = WiFi.firmwareVersion();
@@ -147,27 +145,33 @@ void setup() {
     // Parse received TLE
     orb = tle.getOrbit();
 
-    Serial.println();
-    Serial.print("epoch: "); Serial.println(orb.epoch_J);
-    Serial.print("utc:   "); Serial.println(orb.epochUTC);
-    Serial.print("incl:  "); Serial.println(orb.incl,8);
-    Serial.print("a:     "); Serial.println(orb.a);
-    Serial.print("ecc:   "); Serial.println(orb.ecc,8);
-    Serial.print("Omega: "); Serial.println(orb.Omega,8);
-    Serial.print("omega: "); Serial.println(orb.omega,8);
-    Serial.print("M0:    "); Serial.println(orb.M0,8);
-    Serial.print("n:     "); Serial.println(orb.n,8);
-    Serial.print("n_dot: "); Serial.println(orb.n_dot,16);
+    if (DO_PRINT_DEBUG) {
+        Serial.println();
+        Serial.print("epoch: "); Serial.println(orb.epoch_J);
+        Serial.print("utc:   "); Serial.println(orb.epochUTC);
+        Serial.print("incl:  "); Serial.println(orb.incl,8);
+        Serial.print("a:     "); Serial.println(orb.a);
+        Serial.print("ecc:   "); Serial.println(orb.ecc,8);
+        Serial.print("Omega: "); Serial.println(orb.Omega,8);
+        Serial.print("omega: "); Serial.println(orb.omega,8);
+        Serial.print("M0:    "); Serial.println(orb.M0,8);
+        Serial.print("n:     "); Serial.println(orb.n,8);
+        Serial.print("n_dot: "); Serial.println(orb.n_dot,16);
+    }
+    
 
     lastNtpUpdateMillis   = millis();
     lastTleUpdateMillis   = lastNtpUpdateMillis;
     lastOrbitUpdateMillis = lastNtpUpdateMillis;
     delay(100);
 
-    Serial.print("In setup(): lastNtpUpdateMillis: ");
-    Serial.println(lastTleUpdateMillis);
-    Serial.print("In setup(): lastTleUpdateMillis: ");
-    Serial.println(lastTleUpdateMillis);
+    if (DO_PRINT_DEBUG) {
+        Serial.print("In setup(): lastNtpUpdateMillis: ");
+        Serial.println(lastTleUpdateMillis);
+        Serial.print("In setup(): lastTleUpdateMillis: ");
+        Serial.println(lastTleUpdateMillis);
+    }
+
 
     ntpPacketSent = false;
     tleQuerySent = false;
@@ -194,6 +198,17 @@ void loop() {
 
     // Advance stepper if necessary
     ped.runStepper();
+
+    // Recheck wifi connection status, and try to reconnect if disconnected
+    if (WiFi.status() != WL_CONNECTED) {
+        resetDisplay(0,0,1);
+        display.println("Wifi disconnected, attempting to reconnect...");
+        display.display();
+        do {
+            status = WiFi.begin(ssid, pass);
+            delay(10000);     // wait until connection is ready!
+        } while (status != WL_CONNECTED);
+    }
 
     // Resend NTP packet regularly to keep time synchronized
     if (!ntpPacketSent && (timeSinceNtpUpdate > (TIME_REFRESH_DELAY_MIN*60))) {
@@ -224,6 +239,7 @@ void loop() {
 
     long currUTC = ntp.unixEpoch + timeSinceNtpUpdate;
 
+    // Update Az/El at regular rate
     if (timeSinceOrbitUpdateMillis >= ORBIT_REFRESH_DELAY_MS) {
         Serial.printf("timeSinceNtpUpdate: %lu, timeSinceTleUpdate: %lu\n",
         timeSinceNtpUpdate, timeSinceTleUpdate);
@@ -243,23 +259,17 @@ void loop() {
         posNED = ecef2ned(posECEF,llaRef,DEGREES);
         posAER = ned2AzElRng(posNED);
 
-        Serial.printf("posECI:  [%0.3f,%0.3f,%0.3f]\n",posECI.x,posECI.y,posECI.z);
-        Serial.printf("posECEF: [%0.3f,%0.3f,%0.3f]\n",posECEF.x,posECEF.y,posECEF.z);
-        Serial.printf("posLLA:  [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
-        Serial.printf("posNED:  [%0.3f,%0.3f,%0.3f]\n",posNED.x,posNED.y,posNED.z);
-        Serial.printf("posAER:  [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
+        if (DO_PRINT_DEBUG) {
+            Serial.printf("posECI:  [%0.3f,%0.3f,%0.3f]\n",posECI.x,posECI.y,posECI.z);
+            Serial.printf("posECEF: [%0.3f,%0.3f,%0.3f]\n",posECEF.x,posECEF.y,posECEF.z);
+            Serial.printf("posLLA:  [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
+            Serial.printf("posNED:  [%0.3f,%0.3f,%0.3f]\n",posNED.x,posNED.y,posNED.z);
+            Serial.printf("posAER:  [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
+        }
 
         // Update target position
         ped.setTargetAz(posAER[0]);
         ped.setElevation(90+posAER[1]);
-
-        // Print status to display
-        // resetDisplay(0,10,1);
-        // display.printf("UTC: %lu\n",currUTC);
-        // display.printf("posLLA: [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
-        // display.printf("posAER: [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
-        
-        // display.display();
 
         // Display current date/time on screen
         displayCurrTime(posAER[0],posAER[1]);

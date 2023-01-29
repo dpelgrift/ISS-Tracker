@@ -19,14 +19,14 @@
 #define HEADER_STR  "ISS (ZARYA)"
 #define TLE_LEN     69
 #define MAX_BUFFER  1024
-
 #define SERVER      "celestrak.org"
 #define QUERY       "/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
 
-// Hardware Check Flags
+// Misc. Flags
 #define CHECK_DISPLAY_CONNECTION    false
 #define CHECK_COMPASS_CONNECTION    false
 #define WAIT_FOR_SERIAL             false
+#define DO_PRINT_DEBUG              false
 
 // If set true, will not attempt to automatically point north at startup
 // Assumes that pedestal manually pointed north before startup
@@ -39,7 +39,7 @@
 // Refresh durations
 #define TIME_REFRESH_DELAY_MIN 10
 #define TLE_REFRESH_DELAY_MIN  60
-#define ORBIT_REFRESH_DELAY_MS 500
+#define ORBIT_REFRESH_DELAY_MS 1000
 
 // Stepper Motor Specs
 #define STEPS_PER_REV (2038*4)
