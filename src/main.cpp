@@ -72,24 +72,20 @@ void setup() {
     delay(1000);
     ped.setElevation(90);
 
-    // while (true) {
-    //     resetDisplay(0,0,2);
-    //     display.printf("Az: %0.1f\n",ped.getAverageHeading());
-    //     display.display();
-    //     delay(100);
-    // }
 
-    resetDisplay(0,0,2);
-    display.printf("Az: %0.1f\n",ped.getAverageHeading());
-    display.display();
-    ped.pointNorth();
-    resetDisplay(0,0,2);
-    display.printf("Az: %0.1f\n",ped.getAverageHeading());
-    display.display();
-    ped.pointNorth();
-    resetDisplay(0,0,2);
-    display.printf("Az: %0.1f\n",ped.getAverageHeading());
-    display.display();
+    if (!DO_BYPASS_COMPASS) {
+        resetDisplay(0,0,2);
+        display.printf("Az: %0.1f\n",ped.getAverageHeading());
+        display.display();
+        ped.pointNorth();
+        resetDisplay(0,0,2);
+        display.printf("Az: %0.1f\n",ped.getAverageHeading());
+        display.display();
+        ped.pointNorth();
+        resetDisplay(0,0,2);
+        display.printf("Az: %0.1f\n",ped.getAverageHeading());
+        display.display();
+    }
 
     ped.stepper.setCurrentPosition(0);
     // check for the WiFi module:

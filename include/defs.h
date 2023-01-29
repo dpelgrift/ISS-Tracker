@@ -28,6 +28,10 @@
 #define CHECK_COMPASS_CONNECTION    false
 #define WAIT_FOR_SERIAL             false
 
+// If set true, will not attempt to automatically point north at startup
+// Assumes that pedestal manually pointed north before startup
+#define DO_BYPASS_COMPASS           false
+
 #define MAG_NORTH_LAT           86.494
 #define MAG_NORTH_LON           162.867
 #define TRUE_NORTH_OFFSET_DEG   -3.73

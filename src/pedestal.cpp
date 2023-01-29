@@ -24,7 +24,7 @@ void Pedestal::begin() {
     if (!compass.begin(MMC56X3_DEFAULT_ADDRESS, &Wire)) {  // I2C mode
         /* There was a problem detecting the MMC5603 ... check your connections */
         Serial.println("No compass detected");
-        while (CHECK_COMPASS_CONNECTION) delay(10);
+        while (CHECK_COMPASS_CONNECTION and !DO_BYPASS_COMPASS) delay(10);
     }
 }
 
