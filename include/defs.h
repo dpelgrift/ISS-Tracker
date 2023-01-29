@@ -7,6 +7,15 @@
 #define SPIWIFI_ACK   11   // a.k.a BUSY or READY pin
 #define ESP32_GPIO0   -1
 
+#define SERVO_PIN 10
+
+// Stepper pins
+#define STEP1 A3
+#define STEP2 A1
+#define STEP3 A2
+#define STEP4 A0
+
+// TLE Server & Query Info
 #define HEADER_STR  "ISS (ZARYA)"
 #define TLE_LEN     69
 #define MAX_BUFFER  1024
@@ -14,6 +23,7 @@
 #define SERVER      "celestrak.org"
 #define QUERY       "/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
 
+// Hardware Check Flags
 #define CHECK_DISPLAY_CONNECTION    false
 #define CHECK_COMPASS_CONNECTION    false
 #define WAIT_FOR_SERIAL             false
@@ -22,9 +32,19 @@
 #define MAG_NORTH_LON           162.867
 #define TRUE_NORTH_OFFSET_DEG   -3.73
 
+// Refresh durations
 #define TIME_REFRESH_DELAY_MIN 10
 #define TLE_REFRESH_DELAY_MIN  60
-#define ORBIT_REFRESH_DELAY_MS 1500
+#define ORBIT_REFRESH_DELAY_MS 500
+
+// Stepper Motor Specs
+#define STEPS_PER_REV (2038*4)
+#define STEPPER_SPEED 500
+#define STEPPER_ACCEL 300
+
+// Servo PWM Range
+#define SERVO_MIN_PWM 500
+#define SERVO_MAX_PWM 2500
 
 // const int timeZone = 1;   // Central European Time
 const int timeZone = -5;  // Eastern Standard Time (USA)

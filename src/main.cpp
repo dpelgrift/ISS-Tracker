@@ -72,10 +72,26 @@ void setup() {
     delay(1000);
     ped.setElevation(90);
 
+    // while (true) {
+    //     resetDisplay(0,0,2);
+    //     display.printf("Az: %0.1f\n",ped.getAverageHeading());
+    //     display.display();
+    //     delay(100);
+    // }
+
+    resetDisplay(0,0,2);
+    display.printf("Az: %0.1f\n",ped.getAverageHeading());
+    display.display();
     ped.pointNorth();
+    resetDisplay(0,0,2);
+    display.printf("Az: %0.1f\n",ped.getAverageHeading());
+    display.display();
+    ped.pointNorth();
+    resetDisplay(0,0,2);
+    display.printf("Az: %0.1f\n",ped.getAverageHeading());
+    display.display();
+
     ped.stepper.setCurrentPosition(0);
-
-
     // check for the WiFi module:
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
     while (WiFi.status() == WL_NO_MODULE) {
@@ -90,9 +106,10 @@ void setup() {
     listNetworks();
 
     // attempt to connect to Wifi network:
+    resetDisplay(0,0,1);
     Serial.print("Attempting to connect to SSID: ");
     Serial.println(ssid);
-    display.print("Attempting to connect to SSID: ");
+    display.print("Attempting to connect to SSID:\n");
     display.println(ssid);
     display.display();
 
@@ -119,7 +136,7 @@ void setup() {
     // wait to see if a reply is available
     // delay(1000);
     while (!ntp.parsePacket()) {};
-    displayCurrTime();
+    displayCurrTime(0.0,0.0);
 
     // Send TLE query
     tle.sendQuery();
@@ -249,7 +266,7 @@ void loop() {
         // display.display();
 
         // Display current date/time on screen
-        displayCurrTime();
+        displayCurrTime(posAER[0],posAER[1]);
     }
 }
 

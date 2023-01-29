@@ -1,11 +1,11 @@
 #include "pedestal.h"
 
 double steps2deg(long steps) {
-    return double(steps) * 360.0 / STEPS_PER_REV;
+    return double(-steps) * 360.0 / STEPS_PER_REV;
 }
 
 long deg2steps(double azDeg) {
-    return floor(azDeg * STEPS_PER_REV / 360.0);
+    return floor(-azDeg * STEPS_PER_REV / 360.0);
 }
 
 void Pedestal::begin() {
@@ -55,7 +55,7 @@ void Pedestal::setTargetAz(double targetAzDeg) {
 }
 
 void Pedestal::setElevation(double el) {
-    servo.writeMicroseconds(map(long(el*100),0,18000,500,2500));
+    servo.writeMicroseconds(map(long(el*100),0,18000,SERVO_MIN_PWM,SERVO_MAX_PWM));
 }
 
 void Pedestal::runStepper() {
@@ -63,14 +63,19 @@ void Pedestal::runStepper() {
 }
 
 void Pedestal::pointNorth() {
-    double currAz = getAverageHeading();
-    Serial.printf("currAz (deg): %0.3f\n",currAz);
-    stepper.move(deg2steps(-currAz));
-    while (stepper.distanceToGo() != 0) {stepper.run();}
+    double currAz, relAz;
     currAz = getAverageHeading();
-    stepper.move(deg2steps(-currAz));
+    Serial.printf("currAz (deg): %0.3f\n",currAz);
+    relAz = -currAz;
+
+    if (relAz > 180.0) {
+        relAz -= 360.0;
+    } else if (relAz < -180.0) {
+        relAz += 360.0;
+    }
+
+    stepper.move(deg2steps(relAz));
     while (stepper.distanceToGo() != 0) {stepper.run();}
-    
     currAz = getAverageHeading();
     Serial.printf("currAz (deg): %0.3f\n",currAz);
 }
@@ -78,28 +83,18 @@ void Pedestal::pointNorth() {
 double Pedestal::getHeading() {
     // Get compass heading
     compass.getEvent(&compassEvent);
-    return atan2(-compassEvent.magnetic.x,compassEvent.magnetic.y) * RAD_TO_DEG;
-}
-
-double Pedestal::getCurrPedestalAz() {
-    // Get compass heading
-    double heading = getHeading();
-
-    // Convert to true north heading
-    heading += TRUE_NORTH_OFFSET_DEG;
-
-    heading = fmod(heading + 360,360);
-    return heading;
+    return atan2(compassEvent.magnetic.x,-compassEvent.magnetic.y) * RAD_TO_DEG;
 }
 
 double Pedestal::getAverageHeading() {
-    // Compute average heading over a number of readings
+    // Compute average heading over a number of samples
+    const size_t nSamples = 100;
     double heading = 0;
-    for (size_t i = 0; i < 50; ++i) {
-        heading += getHeading();
+    for (size_t i = 0; i < nSamples; ++i) {
+        heading += getHeading() / nSamples;
     }
-    heading /= 50;
     heading += TRUE_NORTH_OFFSET_DEG;
+    heading = fmod(heading + 360,360);
 
     return heading;
 }

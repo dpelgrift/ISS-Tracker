@@ -30,23 +30,43 @@ int beginDisplay() {
     return display.begin(0x3C, true); // Address 0x3C default
 }
 
-void displayCurrTime() {
+void displayCurrTime(double az, double el) {
     display.clearDisplay();
 
+    // // Display Time in "hh:mm" format
+    // display.setCursor(4,2);
+    // display.setTextSize(4);
+    // display.printf("%02i:%02i",hour(),minute());
+
+    // // Dividing Line
+    // display.writeFastHLine(0,38,WIDTH,SH110X_WHITE);
+
+    // // Display Date in "Www MM/dd" format
+    // display.setCursor(2,46);
+    // display.setTextSize(2);
+    // display.print(dayShortStr(weekday()));
+    // display.setCursor(68,46);
+    // display.printf("%02i/%02i",month(),day());
+
     // Display Time in "hh:mm" format
-    display.setCursor(4,2);
-    display.setTextSize(4);
+    display.setCursor(1,2);
+    display.setTextSize(3);
     display.printf("%02i:%02i",hour(),minute());
 
     // Dividing Line
-    display.writeFastHLine(0,38,WIDTH,SH110X_WHITE);
+    display.writeFastHLine(0,28,WIDTH,SH110X_WHITE);
 
     // Display Date in "Www MM/dd" format
-    display.setCursor(2,46);
-    display.setTextSize(2);
+    display.setTextSize(1);
+    display.setCursor(98,2);
     display.print(dayShortStr(weekday()));
-    display.setCursor(68,46);
+    display.setCursor(98,16);
     display.printf("%02i/%02i",month(),day());
+
+    // Display ISS Az/El
+    display.setCursor(0,32);
+    display.setTextSize(2);
+    display.printf("Az:%03.1f\nEl:%03.1f",az,el);
 
     display.display();
 }
