@@ -1,3 +1,6 @@
+/*
+  defs.h - General parameter definitions
+ */
 #pragma once
 
 // Pins
@@ -29,7 +32,7 @@
 #define DO_PRINT_DEBUG              false
 
 // If set true, will not attempt to automatically point north at startup
-// Assumes that pedestal manually pointed north before startup
+// Assumes that pedestal is manually pointed north before startup
 #define DO_BYPASS_COMPASS           false
 
 #define MAG_NORTH_LAT           86.494
@@ -50,6 +53,7 @@
 #define SERVO_MIN_PWM 500
 #define SERVO_MAX_PWM 2500
 
+// Timezone used for time display
 // const int timeZone = 1;   // Central European Time
 const int timeZone = -5;  // Eastern Standard Time (USA)
 // const int timeZone = -4;  // Eastern Daylight Time (USA)

@@ -1,17 +1,20 @@
+/*
+  wifi_utils.cpp - Functions for sending and receiving TLE and NTP queries over Wifi
+ */
 #include "wifi_utils.h"
 
-
-
+// NTP Query Handler Constructor
 NtpQueryHandler::NtpQueryHandler() {
     timeserver = IPAddress(129, 6, 15, 28);
     // timeserver = IPAddress(132, 163, 4, 101); // time-a.timefreq.bldrdoc.gov
 }
 
+// Initialize UDP connection on local port
 void NtpQueryHandler::begin() {
     Udp.begin(localPort);
 }
 
-// send an NTP request to the time server at the given address
+// Send an NTP request to the time server at the given address
 void NtpQueryHandler::sendNTPpacket() {
     // set all bytes in the buffer to 0
     memset(packetBuffer, 0, NTP_PACKET_SIZE);
@@ -33,6 +36,7 @@ void NtpQueryHandler::sendNTPpacket() {
     Udp.endPacket();
 }
 
+// Check if UDP Packet received and if so, parse it
 bool NtpQueryHandler::parsePacket() {
     if (Udp.parsePacket()) {
         Serial.println("packet received");
@@ -49,13 +53,12 @@ bool NtpQueryHandler::parsePacket() {
         Serial.print("Seconds since Jan 1 1900 = ");
         Serial.println(secsSince1900);
 
-        // now convert NTP time into everyday time:
-        Serial.print("Unix time = ");
         // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
         
         // subtract seventy years:
         unixEpoch = secsSince1900 - seventyYears;
 
+        // Set system time based on received packet
         setTime(unixEpoch + timeZone * SECS_PER_HOUR);
 
         // print Unix time:
@@ -67,7 +70,8 @@ bool NtpQueryHandler::parsePacket() {
     return false;
 }
 
-
+// Split full 3-Line-Element (3LE) string into Two-Line-Element components
+// TLE Format: http://celestrak.org/columns/v04n03/#FAQ01
 int read3LE(char* buff, char* line1, char* line2) {
 
     int idx = 0;
@@ -93,8 +97,7 @@ int read3LE(char* buff, char* line1, char* line2) {
     return 0;
 }
 
-
-
+// Connect to Celestrak and send query for the latest ISS 3LE
 void TleQueryHandler::sendQuery() {
     if (client.connect(SERVER, 80)) {
         Serial.println("connected to server");
@@ -107,6 +110,7 @@ void TleQueryHandler::sendQuery() {
     }
 }
 
+// Read received characters into a buffer and return true when we have received everything
 bool TleQueryHandler::rcvData() {
     if (!client.connected()){
         Serial.println();
@@ -123,10 +127,12 @@ bool TleQueryHandler::rcvData() {
     return false;
 }
 
+// Parse characters in received buffer and store TLE lines
 int TleQueryHandler::readTLE() {
     return read3LE(rcvBuffer,line1,line2);
 }
 
+// Create Orbit struct from parsed TLE strings
 Orbit TleQueryHandler::getOrbit() {
     Orbit orb{};
     orb.initFromTLE(line1,line2);
@@ -171,6 +177,8 @@ void printEncryptionType(int thisType) {
     Serial.println();
 }
 
+// List all visible Wifi Networks
+// Note that the Adafruit WiFi Co-Processor can only connect to 2.4 GHz networks
 void listNetworks() {
     // scan for nearby networks:
     Serial.println("** Scan Networks **");

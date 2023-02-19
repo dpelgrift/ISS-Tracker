@@ -1,3 +1,7 @@
+/*
+  iss-tracker.ino - Main methods
+ */
+
 #include <Arduino.h>
 #include <string.h>
 #include <SPI.h>
@@ -15,9 +19,9 @@
 char ssid[] = SECRET_SSID;    // network SSID
 char pass[] = SECRET_PASS;    // network password (use for WPA, or use as key for WEP)
 
-int status = WL_IDLE_STATUS;
+int wifiStatus = WL_IDLE_STATUS;
 
-// Objects/Wrappers
+// Wrapper Structs
 NtpQueryHandler ntp{};
 TleQueryHandler tle{};
 Pedestal ped{};
@@ -108,9 +112,9 @@ void setup() {
 
     // Connect to WPA/WPA2 network
     do {
-        status = WiFi.begin(ssid, pass);
+        wifiStatus = WiFi.begin(ssid, pass);
         delay(10000);     // wait until connection is ready!
-    } while (status != WL_CONNECTED);
+    } while (wifiStatus != WL_CONNECTED);
 
     Serial.println("Connected to wifi");
     display.println("Connected to wifi");
@@ -203,9 +207,9 @@ void loop() {
         display.println("Wifi disconnected, attempting to reconnect...");
         display.display();
         do {
-            status = WiFi.begin(ssid, pass);
+            wifiStatus = WiFi.begin(ssid, pass);
             delay(10000);     // wait until connection is ready!
-        } while (status != WL_CONNECTED);
+        } while (wifiStatus != WL_CONNECTED);
     }
 
     // Resend NTP packet regularly to keep time synchronized

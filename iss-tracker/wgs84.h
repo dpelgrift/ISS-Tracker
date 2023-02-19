@@ -1,3 +1,7 @@
+/*
+  wgs84.h - params defining WGS84 Ellipsoid parameters. Used in coordinate-frame conversions
+    Derived from the navduino library: https://github.com/PowerBroker2/navduino
+ */
 #pragma once
 #include "Arduino.h"
 

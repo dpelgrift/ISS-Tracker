@@ -1,3 +1,6 @@
+/*
+  pedestal.h - Pedestal struct definition
+ */
 #pragma once
 #include <Arduino.h>
 #include <AccelStepper.h>
@@ -10,6 +13,8 @@
 double steps2deg(long steps);
 long deg2steps(double azDeg);
 
+
+// Struct that wraps around pedestal control devices (Servo, Stepper, & Compass)
 struct Pedestal {
     Servo servo;
     AccelStepper stepper;

@@ -1,5 +1,48 @@
+/*
+  orbit_utils.cpp - Utilities to handle orbit initialization and propagation, and timestamp conversion
+ */
 #include "orbit_utils.h"
 
+// Convert Unix Seconds to Julian date
+double getJulianFromUnix( long unixSecs ) {
+   return ( unixSecs / SECONDS_PER_DAY ) + J2U;
+}
+
+// Convert Julian date to Unix Seconds
+long getUnixSecFromJulian(double julian) {
+    return long((julian - J2U) * SECONDS_PER_DAY);
+}
+
+// Find Earth-Rotation-Angle (ERA) from julian date
+// Source: https://en.wikipedia.org/wiki/Sidereal_time#ERA
+double getEraFromJulian(double julian) {
+    double Tu = julian - 2451545.0;
+    return fmod(TWO_PI * (0.7790572732640 + 1.00273781191135448 * Tu),TWO_PI);
+}
+
+// Calculate Eccentric Anomaly from Mean Anomaly
+double eccAnomalyFromMean(double M0, double ecc) {
+    double E = M0, dE = 1.;
+    // Iterative Newton-Raphson solution for eccentic anomaly
+    while (dE > 1e-8) {
+        dE = (E - ecc*sin(E) - M0)/(1. - ecc*cos(E));
+        E = E - dE;
+    }
+    return E;
+}
+
+// Calculate True Anomaly from Eccentric Anomaly
+double trueAnomalyFromEcc(double E, double ecc) {
+    return 2*atan2(sqrt(1.+ecc)*sin(E/2.),sqrt(1.-ecc)*cos(E/2.));
+}
+
+// Calculate True Anomaly from Mean Anomaly
+double trueAnomalyFromMean(double M0, double ecc) {
+    double E = eccAnomalyFromMean(M0,ecc);
+    return trueAnomalyFromEcc(E,ecc);
+}
+
+// Convert TLE character string subset to angle
 static int get_angle( const char *buff) {
    int rval = 0;
 
@@ -14,57 +57,14 @@ static int get_angle( const char *buff) {
    return rval;
 }
 
+// Parse TLE mean-motion
 static double get_eight_places( const char *ptr) {
    return (double)atoi( ptr) + (double)atoi(ptr + 4) * 1e-8;
 }
 
-double getJulianFromUnix( long unixSecs ) {
-   return ( unixSecs / SECONDS_PER_DAY ) + J2U;
-}
-
-long getUnixSecFromJulian(double julian) {
-    return long((julian - J2U) * SECONDS_PER_DAY);
-}
-
-double getEraFromJulian(double julian) {
-    double Tu = julian - 2451545.0;
-    return fmod(TWO_PI * (0.7790572732640 + 1.00273781191135448 * Tu),TWO_PI);
-}
-
-long JulianDate(int year, int month, int day) {
-	long JD_whole;
-	int A, B;
-	if (month <= 2) {
-		year--;
-		month += 12;
-	}
-	A = year / 100;
-	B = 2 - A + A / 4;
-	JD_whole = (long) (365.25 * (year + 4716)) + (int) (30.6001 * (month + 1))
-			+ day + B - 1524;
-	return JD_whole;
-}
-
-double eccAnomalyFromMean(double M0, double ecc) {
-    double E = M0, dE = 1.;
-    // Iterative Newton-Raphson solution for eccentic anomaly
-    while (dE > 1e-8) {
-        dE = (E - ecc*sin(E) - M0)/(1. - ecc*cos(E));
-        E = E - dE;
-    }
-    return E;
-}
-
-double trueAnomalyFromEcc(double E, double ecc) {
-    return 2*atan2(sqrt(1.+ecc)*sin(E/2.),sqrt(1.-ecc)*cos(E/2.));
-}
-
-double trueAnomalyFromMean(double M0, double ecc) {
-    double E = eccAnomalyFromMean(M0,ecc);
-    return trueAnomalyFromEcc(E,ecc);
-}
-
-
+// Initialize orbital elements from Two-Line-Element (TLE)
+// TLE Format: http://celestrak.org/columns/v04n03/#FAQ01
+// Derived from: https://github.com/Bill-Gray/sat_code
 void Orbit::initFromTLE(char* line1, char* line2) {
     char tbuff[13];
 
@@ -88,19 +88,22 @@ void Orbit::initFromTLE(char* line1, char* line2) {
     may immediately follow. */
     memcpy( tbuff, line2 + 51, 12);
     tbuff[12] = '\0';
-    /* Input mean motion,  derivative of mean motion and second  */
-    /* deriv of mean motion,  are all in revolutions and days.   */
-    /* Convert them here to radians and seconds:                 */
+    /* Input mean motion, and derivative of mean motion   */
+    /* are in revolutions and days.                       */
+    /* Convert them here to radians and seconds:          */
     n = get_eight_places( tbuff) * TWO_PI / SECONDS_PER_DAY;
     n_dot = (double)atoi( line1 + 35)
-                    * 1.0e-8 * TWO_PI / (SECONDS_PER_DAY*SECONDS_PER_DAY);
+                    * 1.0e-8 * TWO_PI / (SECONDS_PER_DAY_SQ);
     if( line1[33] == '-')
         n_dot *= -1.;
 
     a = pow(MU_EARTH/(n*n),1./3.);
 }
 
-Vec3 Orbit::calcPosECI(double dt_sec) {
+
+// Calculate Earth-Centered-Inertial (ECI) position at some delta-T seconds in the future from the orbital epoch
+// Source: https://downloads.rene-schwarz.com/download/M001-Keplerian_Orbit_Elements_to_Cartesian_State_Vectors.pdf
+void Orbit::calcPosECI(double dt_sec, Vec3& posECI) {
     double n_t = n + n_dot*dt_sec;
 
     double M_t = M0 + n_t*dt_sec;
@@ -122,17 +125,20 @@ Vec3 Orbit::calcPosECI(double dt_sec) {
     double sin_O = sin(Omega);
     double sin_i = sin(incl);
 
-    Vec3 posECI;
-
     posECI.x = o_x*(cos_w*cos_O - sin_w*cos_i*sin_O)
                 - o_y*(sin_w*cos_O + cos_w*cos_i*sin_O);
     posECI.y = o_x*(cos_w*sin_O + sin_w*cos_i*sin_O)
                 - o_y*(cos_w*cos_i*cos_O - sin_w*sin_O);
     posECI.z = o_x*(sin_w*sin_i) + o_y*(cos_w*sin_i);
-
-    return posECI;
 }
 
+// Calculate Earth-Centered-Inertial (ECI) position at a specific UTC time
+void Orbit::calcPosECI_UTC(long UTC, Vec3& posECI) {
+    double dt = double(UTC - epochUTC);
+    calcPosECI(dt,posECI);
+}
+
+// Calculate Earth-Centered-Inertial (ECI) position & velocity at some delta-T seconds in the future from the orbital epoch
 void Orbit::calcPosVelECI(double dt_sec, Vec3& posECI, Vec3& velECI) {
     double n_t = n + n_dot*dt_sec;
 
@@ -175,8 +181,8 @@ void Orbit::calcPosVelECI(double dt_sec, Vec3& posECI, Vec3& velECI) {
     velECI = dcm_plane2ECI * velPlane;
 }
 
+// Calculate Earth-Centered-Inertial (ECI) position & velocity at a specific UTC time
 void Orbit::calcPosVelECI_UTC(long UTC, Vec3& posECI, Vec3& velECI) {
     double dt = double(UTC - epochUTC);
     calcPosVelECI(dt,posECI,velECI);
 }
-

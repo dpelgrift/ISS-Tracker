@@ -1,6 +1,10 @@
+/*
+  math_utils.h - Direction-Cosine-Matrix (DCM) and 3-Element Vector (Vec3) struct definitions
+ */
 #pragma once
 #include <Arduino.h>
 
+// Direction-Cosine-Matrix Definition
 struct Dcm {
     
     double x00;
@@ -17,24 +21,7 @@ struct Dcm {
     Dcm operator*(Dcm D);
 };
 
-
-struct Quat {
-    
-    double w;
-    double x;
-    double y;
-    double z;
-    
-    Quat();
-    Quat(double nw, double nx, double ny, double nz);
-
-    Quat getProduct(Quat q);
-    Quat getConjugate();
-    double getMagnitude();
-    void normalize();
-    Quat getNormalized();
-};
-
+// 3-Element Vector Definition
 struct Vec3 {
     
     double x;
@@ -48,8 +35,6 @@ struct Vec3 {
     double getMagnitude();
     void normalize();
     Vec3 getNormalized();
-    void rotate(Quat *q);
-    Vec3 getRotated(Quat *q);
 };
 
 
@@ -65,10 +50,6 @@ Vec3 operator-(Vec3 a, double b);
 
 
 double dot(Vec3 a, Vec3 b);
-
 double norm(Vec3 v);
-double norm(Quat v);
-
-Vec3 rot(Quat q, Vec3 v);
 
 Vec3 operator*(Dcm d,Vec3 v);
