@@ -1,6 +1,6 @@
 #pragma once
 #include <Arduino.h>
-#include <math_utils.h>
+#include "math_utils.h"
 #include "wgs84.h"
 
 #define deg2rad(angle) (angle * PI / 180.0)

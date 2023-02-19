@@ -3,11 +3,11 @@
 #include <SPI.h>
 #include <Wire.h>
 #include "arduino_secrets.h"
-#include <coord.h>
-#include <orbit_utils.h>
-#include <wifi_utils.h>
-#include <display_utils.h>
-#include <pedestal.h>
+#include "coord.h"
+#include "orbit_utils.h"
+#include "wifi_utils.h"
+#include "display_utils.h"
+#include "pedestal.h"
 
 #include "defs.h"
 
@@ -165,9 +165,9 @@ void setup() {
 
     if (DO_PRINT_DEBUG) {
         Serial.print("In setup(): lastNtpUpdateMillis: ");
-        Serial.println(lastTleUpdateMillis);
+        Serial.println(int32_t(lastTleUpdateMillis));
         Serial.print("In setup(): lastTleUpdateMillis: ");
-        Serial.println(lastTleUpdateMillis);
+        Serial.println(int32_t(lastTleUpdateMillis));
     }
 
 
@@ -273,5 +273,3 @@ void loop() {
         displayCurrTime(posAER[0],posAER[1]);
     }
 }
-
-

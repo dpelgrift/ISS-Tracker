@@ -51,4 +51,3 @@ struct TleQueryHandler {
     int readTLE();
     Orbit getOrbit();
 };
-

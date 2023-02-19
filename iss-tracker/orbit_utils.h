@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <time.h>
-#include <coord.h>
+#include "coord.h"
 
 #define EARTH_ROT_RATE 7.2921159e-5
 #define MU_EARTH 3.986004418e14

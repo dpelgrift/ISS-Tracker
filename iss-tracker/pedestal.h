@@ -4,8 +4,8 @@
 #include <Servo.h>
 #include <Wire.h>
 #include <Adafruit_MMC56x3.h>
-#include <coord.h>
-#include <defs.h>
+#include "coord.h"
+#include "defs.h"
 
 double steps2deg(long steps);
 long deg2steps(double azDeg);

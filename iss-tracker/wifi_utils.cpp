@@ -59,7 +59,7 @@ bool NtpQueryHandler::parsePacket() {
         setTime(unixEpoch + timeZone * SECS_PER_HOUR);
 
         // print Unix time:
-        Serial.println(unixEpoch);
+        Serial.println(int32_t(unixEpoch));
         lastQueryTimeMillis = millis();
 
         return true;
