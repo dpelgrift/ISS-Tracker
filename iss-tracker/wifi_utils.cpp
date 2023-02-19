@@ -133,10 +133,8 @@ int TleQueryHandler::readTLE() {
 }
 
 // Create Orbit struct from parsed TLE strings
-Orbit TleQueryHandler::getOrbit() {
-    Orbit orb{};
+void TleQueryHandler::getOrbit(Orbit& orb) {
     orb.initFromTLE(line1,line2);
-    return orb;
 }
 
 void printEncryptionType(int thisType) {

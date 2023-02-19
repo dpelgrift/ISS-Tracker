@@ -15,11 +15,11 @@
 
 #include "defs.h"
 
-
+// Make sure to enter the appropriate info in arduino_secrets.h
 char ssid[] = SECRET_SSID;    // network SSID
 char pass[] = SECRET_PASS;    // network password (use for WPA, or use as key for WEP)
+Vec3 llaRef = {SECRET_LAT,SECRET_LON,0}; // Pedestal Lat/Lon
 
-int wifiStatus = WL_IDLE_STATUS;
 
 // Wrapper Structs
 NtpQueryHandler ntp{};
@@ -27,9 +27,11 @@ TleQueryHandler tle{};
 Pedestal ped{};
 
 Orbit orb{};
-Vec3 llaRef = {SECRET_LAT,SECRET_LON,0};
+
 Vec3 posECI, velECI, posECEF, posLLA, posNED, posAER;
 double era;
+int wifiStatus = WL_IDLE_STATUS;
+
 time_t lastTleUpdateMillis;
 time_t lastOrbitUpdateMillis;
 time_t lastNtpUpdateMillis;
@@ -38,13 +40,13 @@ bool ntpPacketSent = false;
 bool tleQuerySent = false;
 
 void setup() {
-    //Initialize serial and wait for port to open
+    // Initialize serial and wait for port to open
     Serial.begin(9600);
     delay(250);
     while (!Serial && WAIT_FOR_SERIAL) {}
 
-    delay(250); // wait for the OLED to power up
     /* Initialise the display */
+    delay(250); // wait for the OLED to power up
     if (!display.begin(0x3C, true)) {  // Address 0x3C default
       Serial.println("No display detected");
       while (CHECK_DISPLAY_CONNECTION) delay(10);
@@ -55,37 +57,42 @@ void setup() {
     // internally, this will display the splashscreen.
     display.display();
     delay(1000);
-
     display.setRotation(1);
     resetDisplay(0,0,1);
 
-    // Initialize pedestal controller
+    // Initialize pedestal wrapper
     ped.begin();
 
+    // Test pointer elevation range
+    // Should point at 0 degrees, then -90, then +90, then back to 0
+    // If any are significantly misaligned from expectation,
+    // then you'll need to adjust the SERVO_MIN_PWM & SERVO_MAX_PWM
+    // params in defs.h. Check the spec sheet for your micro-servo of choice
     ped.setElevation(90);
     delay(1000);
-    ped.servo.writeMicroseconds(500);
+    ped.servo.writeMicroseconds(SERVO_MIN_PWM);
     delay(1000);
-    ped.servo.writeMicroseconds(2500);
+    ped.servo.writeMicroseconds(SERVO_MAX_PWM);
     delay(1000);
     ped.setElevation(90);
 
-
+    // If using the compass to align northward, perform a few attempts at automatically pointing northward
     if (!DO_BYPASS_COMPASS) {
-        resetDisplay(0,0,2);
-        display.printf("Az: %0.1f\n",ped.getAverageHeading());
-        display.display();
-        ped.pointNorth();
-        resetDisplay(0,0,2);
-        display.printf("Az: %0.1f\n",ped.getAverageHeading());
-        display.display();
-        ped.pointNorth();
-        resetDisplay(0,0,2);
-        display.printf("Az: %0.1f\n",ped.getAverageHeading());
-        display.display();
+        for (int i = 0; i < 3; ++i){
+            resetDisplay(0,0,2);
+            display.printf("Az: %0.1f\n",ped.getAverageHeading());
+            display.display();
+            ped.pointNorth();
+        }
     }
+    resetDisplay(0,0,2);
+    display.printf("Az: %0.1f\n",ped.getAverageHeading());
+    display.display();
+    delay(100);
 
+    // Reset stepper step count to zero to establish current step count as zero azimuth
     ped.stepper.setCurrentPosition(0);
+    
     // check for the WiFi module:
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
     while (WiFi.status() == WL_NO_MODULE) {
@@ -97,13 +104,16 @@ void setup() {
         while (true) {}
     }
 
+    // Check Wifi Co-processor Firmware
     String fv = WiFi.firmwareVersion();
     Serial.print("Found firmware "); Serial.println(fv);
+
+    // List visible Wifi Networks
     Serial.println("Scanning available networks...");
     listNetworks();
 
-    // attempt to connect to Wifi network:
-    resetDisplay(0,0,1);
+    // Attempt to connect to Wifi network:
+    resetDisplay(0,10,1);
     Serial.print("Attempting to connect to SSID: ");
     Serial.println(ssid);
     display.print("Attempting to connect to SSID:\n");
@@ -123,18 +133,18 @@ void setup() {
 
     // Start NTP connection
     ntp.begin();
-
-    Serial.println("\nStarting connection to server...");
-    display.println("\nStarting connection to server...");
+    Serial.println("\nStarting connection to NTP server...");
+    display.println("\nStarting connection to NTP server...");
     display.display();
+    delay(100);
 
     // Get unix time
-    ntp.sendNTPpacket(); // send an NTP packet to a time server
+    ntp.sendNTPpacket(); // send an NTP packet to the time server
     // wait to see if a reply is available
     while (!ntp.parsePacket()) {};
     displayCurrTime(0.0,0.0);
 
-    // Send TLE query
+    // Send initial TLE query
     tle.sendQuery();
 
     // Wait for response
@@ -145,7 +155,7 @@ void setup() {
     Serial.println(tle.line2);
 
     // Parse received TLE
-    orb = tle.getOrbit();
+    tle.getOrbit(orb);
 
     if (DO_PRINT_DEBUG) {
         Serial.println();
@@ -161,7 +171,7 @@ void setup() {
         Serial.print("n_dot: "); Serial.println(orb.n_dot,16);
     }
     
-
+    // Initialize timers
     lastNtpUpdateMillis   = millis();
     lastTleUpdateMillis   = lastNtpUpdateMillis;
     lastOrbitUpdateMillis = lastNtpUpdateMillis;
@@ -173,16 +183,12 @@ void setup() {
         Serial.print("In setup(): lastTleUpdateMillis: ");
         Serial.println(int32_t(lastTleUpdateMillis));
     }
-
-
-    ntpPacketSent = false;
-    tleQuerySent = false;
 }
 
 uint32_t currMillis, timeSinceNtpUpdate, timeSinceTleUpdate, timeSinceOrbitUpdateMillis;
 
 void loop() {
-
+    // Get current time
     currMillis = millis();
 
     // Try to catch overflow of millis() count and handle gracefully
@@ -233,7 +239,8 @@ void loop() {
     } else if (tleQuerySent) {
         if (tle.rcvData()) {
             Serial.println("Updating Ephemeris");
-            tle.readTLE();
+            tle.readTLE(); // Read received TLE data into separate lines
+            tle.getOrbit(orb); // Update orbit from received TLE data
             lastTleUpdateMillis = millis();
             tleQuerySent = false;
         }
