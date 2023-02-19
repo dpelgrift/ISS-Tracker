@@ -24,7 +24,7 @@ double trueAnomalyFromMean(double M0, double ecc);
 // Struct holding orbital elements
 struct Orbit {
     double epoch_J;
-    long   epochUTC;
+    uint32_t epochUTC;
     double incl;
     double a;
     double ecc;
@@ -37,7 +37,7 @@ struct Orbit {
 
     void initFromTLE(char* line1, char* line2);
     void calcPosECI(double dt_sec, Vec3& posECI);
-    void calcPosECI_UTC(long UTC, Vec3& posECI);
+    void calcPosECI_UTC(uint64_t UTC_ms, Vec3& posECI);
     void calcPosVelECI(double dt_sec, Vec3& posECI, Vec3& velECI);
-    void calcPosVelECI_UTC(long UTC, Vec3& posECI, Vec3& velECI);
+    void calcPosVelECI_UTC(uint64_t UTC_ms, Vec3& posECI, Vec3& velECI);
 };

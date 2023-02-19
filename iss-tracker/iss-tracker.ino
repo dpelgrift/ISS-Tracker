@@ -25,16 +25,13 @@ Vec3 llaRef = {SECRET_LAT,SECRET_LON,0}; // Pedestal Lat/Lon
 NtpQueryHandler ntp{};
 TleQueryHandler tle{};
 Pedestal ped{};
-
 Orbit orb{};
 
+// Misc. variable declaration
 Vec3 posECI, velECI, posECEF, posLLA, posNED, posAER;
 double era;
 int wifiStatus = WL_IDLE_STATUS;
-
-time_t lastTleUpdateMillis;
-time_t lastOrbitUpdateMillis;
-time_t lastNtpUpdateMillis;
+uint32_t lastTleUpdateMillis, lastOrbitUpdateMillis, lastNtpUpdateMillis;
 
 bool ntpPacketSent = false;
 bool tleQuerySent = false;
@@ -84,11 +81,12 @@ void setup() {
             display.display();
             ped.pointNorth();
         }
+        resetDisplay(0,0,2);
+        display.printf("Az: %0.1f\n",ped.getAverageHeading());
+        display.display();
+        delay(100);
     }
-    resetDisplay(0,0,2);
-    display.printf("Az: %0.1f\n",ped.getAverageHeading());
-    display.display();
-    delay(100);
+    
 
     // Reset stepper step count to zero to establish current step count as zero azimuth
     ped.stepper.setCurrentPosition(0);
@@ -185,7 +183,7 @@ void setup() {
     }
 }
 
-uint32_t currMillis, timeSinceNtpUpdate, timeSinceTleUpdate, timeSinceOrbitUpdateMillis;
+uint32_t currMillis, timeSinceNtpUpdate_ms, timeSinceTleUpdate_ms, timeSinceOrbitUpdate_ms;
 
 void loop() {
     // Get current time
@@ -200,9 +198,9 @@ void loop() {
         Serial.println("Time counter overflow hit");
     }
 
-    timeSinceNtpUpdate = (currMillis - lastNtpUpdateMillis)/1000;
-    timeSinceTleUpdate = (currMillis - lastTleUpdateMillis)/1000;
-    timeSinceOrbitUpdateMillis = (currMillis - lastOrbitUpdateMillis);
+    timeSinceNtpUpdate_ms = (currMillis - lastNtpUpdateMillis);
+    timeSinceTleUpdate_ms = (currMillis - lastTleUpdateMillis);
+    timeSinceOrbitUpdate_ms = (currMillis - lastOrbitUpdateMillis);
 
     // Advance stepper if necessary
     ped.runStepper();
@@ -219,7 +217,7 @@ void loop() {
     }
 
     // Resend NTP packet regularly to keep time synchronized
-    if (!ntpPacketSent && (timeSinceNtpUpdate > (TIME_REFRESH_DELAY_MIN*60))) {
+    if (!ntpPacketSent && (timeSinceNtpUpdate_ms > (TIME_REFRESH_DELAY_MIN*60*1000))) {
         ntp.sendNTPpacket();
         ntpPacketSent = true;
         Serial.println("NTP Packet Sent");
@@ -232,7 +230,7 @@ void loop() {
     }
 
     // Resend TLE Query regularly to get updated ephemeris
-    if (!tleQuerySent && (timeSinceTleUpdate > (TLE_REFRESH_DELAY_MIN * 60))) {
+    if (!tleQuerySent && (timeSinceTleUpdate_ms > (TLE_REFRESH_DELAY_MIN * 60*1000))) {
         tle.sendQuery();
         tleQuerySent = true;
         Serial.println("TLE Query Sent");
@@ -246,22 +244,16 @@ void loop() {
         }
     }
 
-    long currUTC = ntp.unixEpoch + timeSinceNtpUpdate;
+    uint64_t currUTC_ms = uint64_t(ntp.unixEpoch)*1000 + uint64_t(timeSinceNtpUpdate_ms);
 
     // Update Az/El at regular rate
-    if (timeSinceOrbitUpdateMillis >= ORBIT_REFRESH_DELAY_MS) {
-        Serial.printf("timeSinceNtpUpdate: %lu, timeSinceTleUpdate: %lu\n",
-        timeSinceNtpUpdate, timeSinceTleUpdate);
-
-        Serial.printf("System Time: %04i-%02i-%02i  %02i:%02i:%02i\n",
-                        year(),month(),day(),hour(),minute(),second());
-
+    if (timeSinceOrbitUpdate_ms >= ORBIT_REFRESH_DELAY_MS) {
+        
         // Calc Earth-Rotation-Angle for current UTC
-        era = getEraFromJulian(getJulianFromUnix(currUTC));
-        Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
-
+        era = getEraFromJulian(getJulianFromUnix(currUTC_ms/1000));
+        
         // Calc ECI Pos/Vel for current UTC
-        orb.calcPosVelECI_UTC(currUTC,posECI,velECI);
+        orb.calcPosVelECI_UTC(currUTC_ms,posECI,velECI);
         lastOrbitUpdateMillis = millis();
         posECEF = eci2ecef(posECI,-era);
         posLLA = ecef2lla(posECEF,DEGREES);
@@ -269,6 +261,12 @@ void loop() {
         posAER = ned2AzElRng(posNED);
 
         if (DO_PRINT_DEBUG) {
+            Serial.printf("System Time: %04i-%02i-%02i  %02i:%02i:%02i\n",
+                        year(),month(),day(),hour(),minute(),second());
+          
+            Serial.printf("timeSinceNtpUpdate_ms: %lu, timeSinceTleUpdate_ms: %lu\n",
+                            timeSinceNtpUpdate_ms, timeSinceTleUpdate_ms);
+            Serial.print("era:   "); Serial.println(era*RAD_TO_DEG,3);
             Serial.printf("posECI:  [%0.3f,%0.3f,%0.3f]\n",posECI.x,posECI.y,posECI.z);
             Serial.printf("posECEF: [%0.3f,%0.3f,%0.3f]\n",posECEF.x,posECEF.y,posECEF.z);
             Serial.printf("posLLA:  [%0.3f,%0.3f,%0.3f]\n",posLLA.x,posLLA.y,posLLA.z/1e3);
@@ -276,8 +274,9 @@ void loop() {
             Serial.printf("posAER:  [%0.3f,%0.3f,%0.3f]\n",posAER.x,posAER.y,posAER.z);
         }
 
-        // Update target position
-        ped.setTargetAz(posAER[0]);
+        // Update target azimuth only if reached current step target (to avoid interrupting smooth movement)
+        if (ped.stepper.distanceToGo() == 0)
+            ped.setTargetAz(posAER[0]);
         ped.setElevation(90+posAER[1]);
 
         // Display current date/time on screen

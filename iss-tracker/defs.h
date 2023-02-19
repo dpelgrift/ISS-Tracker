@@ -42,7 +42,7 @@
 // Refresh durations
 #define TIME_REFRESH_DELAY_MIN 10
 #define TLE_REFRESH_DELAY_MIN  60
-#define ORBIT_REFRESH_DELAY_MS 1000
+#define ORBIT_REFRESH_DELAY_MS 500
 
 // Stepper Motor Specs
 #define STEPS_PER_REV (2038*4)

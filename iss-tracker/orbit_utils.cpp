@@ -133,8 +133,8 @@ void Orbit::calcPosECI(double dt_sec, Vec3& posECI) {
 }
 
 // Calculate Earth-Centered-Inertial (ECI) position at a specific UTC time
-void Orbit::calcPosECI_UTC(long UTC, Vec3& posECI) {
-    double dt = double(UTC - epochUTC);
+void Orbit::calcPosECI_UTC(uint64_t UTC_ms, Vec3& posECI) {
+    double dt = double(UTC_ms - uint64_t(epochUTC)*1000)/1e3;
     calcPosECI(dt,posECI);
 }
 
@@ -182,7 +182,7 @@ void Orbit::calcPosVelECI(double dt_sec, Vec3& posECI, Vec3& velECI) {
 }
 
 // Calculate Earth-Centered-Inertial (ECI) position & velocity at a specific UTC time
-void Orbit::calcPosVelECI_UTC(long UTC, Vec3& posECI, Vec3& velECI) {
-    double dt = double(UTC - epochUTC);
+void Orbit::calcPosVelECI_UTC(uint64_t UTC_ms, Vec3& posECI, Vec3& velECI) {
+    double dt = double(UTC_ms - uint64_t(epochUTC)*1000)/1e3;
     calcPosVelECI(dt,posECI,velECI);
 }
