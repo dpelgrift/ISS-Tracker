@@ -1,5 +1,5 @@
 # ISS-Tracker
-Model files and assembly instructions available here: https://www.printables.com/model/383268-iss-tracker
+Assembly instructions available here: https://www.printables.com/model/383268-iss-tracker
 
 The electronics here are based around an Adafruit Feather m0 Express with a Featherwing ESP32 Wifi coprocessor. In order to build with the arduino IDE, you'll need to install Adafruit boards and SAMD support. Follow the guide here: https://learn.adafruit.com/adafruit-feather-m0-express-designed-for-circuit-python-circuitpython/arduino-ide-setup
 
@@ -12,8 +12,13 @@ Aside from that, all other configuration parameters can be found in defs.h. They
 
 ## Dependencies:
 Adafruit GFX Library
+
 Adafruit SH110X
+
 Adafruit MMC56x3
+
 AccelStepper
+
 TimeLib
+
 WiFiNINA (Adafruit fork, see above)
