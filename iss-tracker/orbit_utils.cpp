@@ -100,44 +100,6 @@ void Orbit::initFromTLE(char* line1, char* line2) {
     a = pow(MU_EARTH/(n*n),1./3.);
 }
 
-
-// Calculate Earth-Centered-Inertial (ECI) position at some delta-T seconds in the future from the orbital epoch
-// Source: https://downloads.rene-schwarz.com/download/M001-Keplerian_Orbit_Elements_to_Cartesian_State_Vectors.pdf
-void Orbit::calcPosECI(double dt_sec, Vec3& posECI) {
-    double n_t = n + n_dot*dt_sec;
-
-    double M_t = M0 + n_t*dt_sec;
-
-    double E_t = eccAnomalyFromMean(M_t,ecc);
-    // Get true anomaly
-    double v_t = trueAnomalyFromEcc(E_t,ecc);
-    // Get distance from center
-    double r_c = a*(1-ecc*cos(E_t));
-
-    double o_x = r_c*cos(v_t);
-    double o_y = r_c*sin(v_t);
-
-    double cos_w = cos(omega);
-    double cos_O = cos(Omega);
-    double cos_i = cos(incl);
-
-    double sin_w = sin(omega);
-    double sin_O = sin(Omega);
-    double sin_i = sin(incl);
-
-    posECI.x = o_x*(cos_w*cos_O - sin_w*cos_i*sin_O)
-                - o_y*(sin_w*cos_O + cos_w*cos_i*sin_O);
-    posECI.y = o_x*(cos_w*sin_O + sin_w*cos_i*sin_O)
-                - o_y*(cos_w*cos_i*cos_O - sin_w*sin_O);
-    posECI.z = o_x*(sin_w*sin_i) + o_y*(cos_w*sin_i);
-}
-
-// Calculate Earth-Centered-Inertial (ECI) position at a specific UTC time
-void Orbit::calcPosECI_UTC(uint64_t UTC_ms, Vec3& posECI) {
-    double dt = double(UTC_ms - uint64_t(epochUTC)*1000)/1e3;
-    calcPosECI(dt,posECI);
-}
-
 // Calculate Earth-Centered-Inertial (ECI) position & velocity at some delta-T seconds in the future from the orbital epoch
 void Orbit::calcPosVelECI(double dt_sec, Vec3& posECI, Vec3& velECI) {
     double n_t = n + n_dot*dt_sec;
