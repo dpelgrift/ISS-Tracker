@@ -23,13 +23,10 @@ int read3LE(char* buff, char* line1, char* line2);
 // Struct to handle UDP querying of NTP Time Server
 struct NtpQueryHandler {
     WiFiUDP Udp;
-    IPAddress timeserver;
     byte packetBuffer[NTP_PACKET_SIZE];
 
     time_t unixEpoch;
     time_t lastQueryTimeMillis;
-
-    NtpQueryHandler();
 
     void begin();
     void sendNTPpacket();

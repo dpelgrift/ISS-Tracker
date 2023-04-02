@@ -3,12 +3,6 @@
  */
 #include "wifi_utils.h"
 
-// NTP Query Handler Constructor
-NtpQueryHandler::NtpQueryHandler() {
-    timeserver = IPAddress(129, 6, 15, 28);
-    // timeserver = IPAddress(132, 163, 4, 101); // time-a.timefreq.bldrdoc.gov
-}
-
 // Initialize UDP connection on local port
 void NtpQueryHandler::begin() {
     Udp.begin(localPort);
@@ -31,7 +25,7 @@ void NtpQueryHandler::sendNTPpacket() {
 
     // all NTP fields have been given values, now
     // you can send a packet requesting a timestamp:
-    Udp.beginPacket(timeserver, 123); //NTP requests are to port 123
+    Udp.beginPacket("time.nist.gov", 123); //NTP requests are to port 123
     Udp.write(packetBuffer, NTP_PACKET_SIZE);
     Udp.endPacket();
 }
